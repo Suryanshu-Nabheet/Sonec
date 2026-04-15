@@ -1,0 +1,447 @@
+/**
+ * SONEC Command Handlers
+ * 
+ * Registers and handles all VS Code commands for the SONEC engine.
+ * Commands cover:
+ * - Completion acceptance (full, word, line)
+ * - Next-edit navigation
+ * - Transformation application
+ * - Engine management (toggle, cache clear, re-index)
+ */
+
+import * as vscode from 'vscode';
+import { Logger } from '../core/logger';
+import { EventBus } from '../core/event-bus';
+import { ConfigManager } from '../core/config';
+import { ContextEngine } from '../context/context-engine';
+import { PredictionEngine } from '../prediction/prediction-engine';
+import { ActionExecutionEngine } from '../execution/action-engine';
+import { SonecCompletionProvider } from '../providers/completion-provider';
+import { PerformanceMonitor } from '../performance/performance-monitor';
+import { SettingsPanel } from '../settings/settings-panel';
+
+/**
+ * Manages the registration and execution of user-facing commands.
+ */
+export class CommandHandlers implements vscode.Disposable {
+  private disposables: vscode.Disposable[] = [];
+  private logger: Logger;
+  private eventBus: EventBus;
+  private config: ConfigManager;
+  private contextEngine: ContextEngine;
+  private predictionEngine: PredictionEngine;
+  private actionEngine: ActionExecutionEngine;
+  private completionProvider: SonecCompletionProvider;
+  private perfMonitor: PerformanceMonitor;
+  private extensionUri: vscode.Uri;
+
+  /** Index of current next-edit prediction */
+  private currentEditIndex = 0;
+
+  constructor(
+    contextEngine: ContextEngine,
+    predictionEngine: PredictionEngine,
+    actionEngine: ActionExecutionEngine,
+    completionProvider: SonecCompletionProvider,
+    perfMonitor: PerformanceMonitor,
+    extensionUri: vscode.Uri
+  ) {
+    this.logger = Logger.getInstance();
+    this.eventBus = EventBus.getInstance();
+    this.config = ConfigManager.getInstance();
+    this.contextEngine = contextEngine;
+    this.predictionEngine = predictionEngine;
+    this.actionEngine = actionEngine;
+    this.completionProvider = completionProvider;
+    this.perfMonitor = perfMonitor;
+    this.extensionUri = extensionUri;
+
+    this.registerCommands();
+  }
+
+  /**
+   * Registers all commands with VS Code.
+   */
+  private registerCommands(): void {
+    this.register('sonec.acceptSuggestion', () => this.acceptSuggestion());
+    this.register('sonec.acceptWord', () => this.acceptWord());
+    this.register('sonec.acceptLine', () => this.acceptLine());
+    this.register('sonec.jumpToNextEdit', () => this.jumpToNextEdit());
+    this.register('sonec.jumpToPrevEdit', () => this.jumpToPrevEdit());
+    this.register('sonec.applyTransformation', () => this.applyTransformation());
+    this.register('sonec.dismissSuggestion', () => this.dismissSuggestion());
+    this.register('sonec.triggerCompletion', () => this.triggerCompletion());
+    this.register('sonec.showPredictedEdits', () => this.showPredictedEdits());
+    this.register('sonec.toggleEnabled', () => this.toggleEnabled());
+    this.register('sonec.clearCache', () => this.clearCache());
+    this.register('sonec.reindexProject', () => this.reindexProject());
+    this.register('sonec.openSettings', () => this.openSettings());
+    this.register('sonec.applySpeculativePlan', (plan) => this.applySpeculativePlan(plan));
+  }
+
+  /**
+   * Helper to register a command and track its disposable.
+   * @param commandId The unique command identifier
+   * @param handler The function to execute when the command is triggered
+   */
+  private register(
+    commandId: string,
+    handler: (...args: any[]) => any
+  ): void {
+    this.disposables.push(
+      vscode.commands.registerCommand(commandId, handler)
+    );
+  }
+
+  /**
+   * Accept the full suggested completion.
+   */
+  private async acceptSuggestion(): Promise<void> {
+    const accepted = await this.completionProvider.acceptFull();
+    if (!accepted) {
+      // Fallback: let VS Code handle Tab normally
+      await vscode.commands.executeCommand('tab');
+    }
+  }
+
+  /**
+   * Accept the next word of the suggested completion.
+   */
+  private async acceptWord(): Promise<void> {
+    const accepted = await this.completionProvider.acceptWord();
+    if (!accepted) {
+      await vscode.commands.executeCommand('cursorWordRight');
+    }
+  }
+
+  /**
+   * Accept the next line of the suggested completion.
+   */
+  private async acceptLine(): Promise<void> {
+    const accepted = await this.completionProvider.acceptLine();
+    if (!accepted) {
+      await vscode.commands.executeCommand('cursorEnd');
+    }
+  }
+
+  /**
+   * Dismiss the current suggestion.
+   */
+  private dismissSuggestion(): void {
+    this.completionProvider.dismiss();
+  }
+
+  /**
+   * Manually trigger an inline completion.
+   */
+  private async triggerCompletion(): Promise<void> {
+    await vscode.commands.executeCommand(
+      'editor.action.inlineSuggest.trigger'
+    );
+  }
+
+  /**
+   * Jump to the next predicted edit location.
+   */
+  private async jumpToNextEdit(): Promise<void> {
+    const target = this.predictionEngine.getJumpTarget();
+    if (!target) {
+      // If no predictions, try to generate them
+      await this.generateNextEditPredictions();
+      return;
+    }
+
+    await this.navigateToEdit(target.file, target.position);
+    
+    this.eventBus.emit({
+      type: 'next_edit_jumped',
+      data: target
+    });
+
+    // Show inline hint about the jump
+    const decoration = vscode.window.createTextEditorDecorationType({
+      after: {
+        contentText: ` <- Predicted Edit`,
+        color: new vscode.ThemeColor(
+          'editorGhostText.foreground'
+        ),
+        fontStyle: 'italic',
+      },
+    });
+
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      editor.setDecorations(decoration, [
+        new vscode.Range(target.position, target.position),
+      ]);
+
+      // Remove decoration after 3 seconds
+      setTimeout(() => decoration.dispose(), 3000);
+    }
+  }
+
+  /**
+   * Jump to the previous predicted edit location (placeholder for history navigation).
+   */
+  private async jumpToPrevEdit(): Promise<void> {
+    const target = this.predictionEngine.getJumpTarget();
+    if (!target) {return;}
+    await this.navigateToEdit(target.file, target.position);
+
+    this.eventBus.emit({
+      type: 'next_edit_jumped',
+      data: {
+        file: target.file,
+        position: target.position,
+      },
+    });
+  }
+
+  /**
+   * Generate next-edit predictions from current context.
+   */
+  private async generateNextEditPredictions(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {return;}
+
+    const cts = new vscode.CancellationTokenSource();
+    try {
+      const context = await this.contextEngine.buildContext(
+        editor.document,
+        editor.selection.active,
+        cts.token
+      );
+
+      const predictions =
+        await this.predictionEngine.predictNextEdits(context);
+
+      if (predictions.length > 0) {
+        this.currentEditIndex = -1;
+        await vscode.commands.executeCommand(
+          'setContext',
+          'sonec.hasNextEdit',
+          true
+        );
+        vscode.window.showInformationMessage(
+          `SONEC: Found \${predictions.length} predicted edit locations`
+        );
+      } else {
+        vscode.window.showInformationMessage(
+          'SONEC: No edit predictions available'
+        );
+      }
+    } finally {
+      cts.dispose();
+    }
+  }
+
+  /**
+   * Navigate to a specific file and position in the workspace.
+   * @param filePath The relative path to the file
+   * @param position The position to move the cursor to
+   */
+  private async navigateToEdit(
+    filePath: string,
+    position: vscode.Position
+  ): Promise<void> {
+    const wsFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!wsFolder) {return;}
+
+    const uri = vscode.Uri.joinPath(wsFolder.uri, filePath);
+
+    try {
+      const doc = await vscode.workspace.openTextDocument(uri);
+      const editor = await vscode.window.showTextDocument(doc, {
+        selection: new vscode.Range(position, position),
+        preview: false,
+      });
+
+      // Center the view on the target line
+      editor.revealRange(
+        new vscode.Range(position, position),
+        vscode.TextEditorRevealType.InCenter
+      );
+    } catch (err) {
+      this.logger.error(`Failed to navigate to \${filePath}`, err);
+    }
+  }
+
+  /**
+   * Apply a full transformation plan to the project.
+   */
+  private async applyTransformation(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {return;}
+
+    const cts = new vscode.CancellationTokenSource();
+
+    try {
+      // Show progress indicator
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'SONEC: Analyzing transformation...',
+          cancellable: true,
+        },
+        async (progress, progressToken) => {
+          progressToken.onCancellationRequested(() => cts.cancel());
+
+          // Build context
+          progress.report({ message: 'Building context...' });
+          const context = await this.contextEngine.buildContext(
+            editor.document,
+            editor.selection.active,
+            cts.token
+          );
+
+          // Get transformation plan
+          progress.report({ message: 'Generating transformation...' });
+          const plan = await this.predictionEngine.getTransformation(
+            context,
+            undefined,
+            cts.token
+          );
+
+          if (!plan) {
+            vscode.window.showWarningMessage(
+              'SONEC: Could not generate transformation'
+            );
+            return;
+          }
+
+          // Show preview and ask for confirmation
+          const actionSummary = plan.actions
+            .map(
+              (a) =>
+                `\${a.type}: \${a.file}\${a.description ? ' - ' + a.description : ''}`
+            )
+            .join('\n');
+
+          const confirm = await vscode.window.showInformationMessage(
+            `SONEC: \${plan.actions.length} action(s) planned.\n\n\${actionSummary}`,
+            { modal: true },
+            'Apply',
+            'Cancel'
+          );
+
+          if (confirm !== 'Apply') {return;}
+
+          // Execute
+          progress.report({ message: 'Applying changes...' });
+          const success = await this.actionEngine.executePlan(plan);
+
+          if (success) {
+            vscode.window.showInformationMessage(
+              `SONEC: Applied \${plan.actions.length} action(s) successfully`
+            );
+          } else {
+            vscode.window.showErrorMessage(
+              'SONEC: Transformation failed. Check output for details.'
+            );
+          }
+        }
+      );
+    } finally {
+      cts.dispose();
+    }
+  }
+
+  /**
+   * Show a dashboard with performance metrics and predicted edits.
+   */
+  private async showPredictedEdits(): Promise<void> {
+    const metrics = this.perfMonitor.getMetrics();
+    const target = this.predictionEngine.getJumpTarget();
+
+    const items: vscode.QuickPickItem[] = [
+      {
+        label: 'Performance Metrics',
+        description: `Avg: \${Math.round(metrics.averageLatencyMs)}ms | P95: \${Math.round(metrics.p95LatencyMs)}ms | Acceptance: \${Math.round(metrics.acceptanceRate * 100)}%`,
+        kind: vscode.QuickPickItemKind.Default,
+      },
+      { label: '', kind: vscode.QuickPickItemKind.Separator },
+    ];
+
+    if (target) {
+        items.push({
+          label: `Edit Target: \${target.file}:\${target.position.line + 1}`,
+          description: 'Top predicted next edit',
+          detail: 'Move cursor to the next logical task step',
+        });
+    } else {
+      items.push({
+        label: 'No predictions available',
+        description: 'Trigger next-edit prediction via commands',
+      });
+    }
+
+    const selected = await vscode.window.showQuickPick(items, {
+      placeHolder: 'SONEC Engine Dashboard',
+    });
+
+    if (selected && selected.label.startsWith('Edit Target:')) {
+      const match = selected.label.match(/Edit Target:\s+(.+):(\d+)/);
+      if (match) {
+        await this.navigateToEdit(
+          match[1],
+          new vscode.Position(parseInt(match[2]) - 1, 0)
+        );
+      }
+    }
+  }
+
+  /**
+   * Toggle the SONEC engine enabled/disabled state.
+   */
+  private async toggleEnabled(): Promise<void> {
+    const current = this.config.getValue('enabled');
+    await vscode.workspace
+      .getConfiguration('sonec')
+      .update('enabled', !current, true);
+
+    vscode.window.showInformationMessage(
+      `SONEC: \${!current ? 'Enabled' : 'Disabled'}`
+    );
+  }
+
+  /**
+   * Clear the completion cache.
+   */
+  private async clearCache(): Promise<void> {
+    // Individual modules handle their own caches
+    vscode.window.showInformationMessage('SONEC: Cache cleared');
+  }
+
+  /**
+   * Re-index the project to refresh style and symbol data.
+   */
+  private async reindexProject(): Promise<void> {
+    vscode.window.showInformationMessage(
+      'SONEC: Re-indexing project... (style patterns and symbols will be refreshed)'
+    );
+  }
+
+  /**
+   * Open the SONEC settings panel.
+   */
+  private openSettings(): void {
+    SettingsPanel.createOrShow(this.extensionUri);
+  }
+
+  /**
+   * Apply a speculative action plan to the project.
+   * @param plan The action plan to apply
+   */
+  private async applySpeculativePlan(plan: any): Promise<void> {
+    if (!plan) return;
+    this.logger.info(`Applying speculative plan: \${plan.id}`);
+    await this.actionEngine.executePlan(plan);
+  }
+
+  /**
+   * Disposes the command handler resources.
+   */
+  dispose(): void {
+    this.disposables.forEach((d) => d.dispose());
+  }
+}

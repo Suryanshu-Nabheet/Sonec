@@ -1,0 +1,249 @@
+{
+  "name": "sonec",
+  "displayName": "SONEC — Autonomous Code Engine",
+  "description": "Structured Omniscient Neural Editor & Compiler. Autonomous code completion, transformation, and multi-file intelligence engine for VS Code.",
+  "version": "0.1.0",
+  "publisher": "sonec",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Machine Learning",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "autocomplete",
+    "code completion",
+    "copilot",
+    "inline completion",
+    "refactoring",
+    "autonomous"
+  ],
+  "activationEvents": [
+    "*"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "sonec.acceptSuggestion",
+        "title": "SONEC: Accept Full Suggestion"
+      },
+      {
+        "command": "sonec.acceptWord",
+        "title": "SONEC: Accept Next Word"
+      },
+      {
+        "command": "sonec.acceptLine",
+        "title": "SONEC: Accept Next Line"
+      },
+      {
+        "command": "sonec.jumpToNextEdit",
+        "title": "SONEC: Jump to Next Predicted Edit"
+      },
+      {
+        "command": "sonec.jumpToPrevEdit",
+        "title": "SONEC: Jump to Previous Predicted Edit"
+      },
+      {
+        "command": "sonec.applyTransformation",
+        "title": "SONEC: Apply Full Transformation"
+      },
+      {
+        "command": "sonec.dismissSuggestion",
+        "title": "SONEC: Dismiss Suggestion"
+      },
+      {
+        "command": "sonec.triggerCompletion",
+        "title": "SONEC: Trigger Completion"
+      },
+      {
+        "command": "sonec.showPredictedEdits",
+        "title": "SONEC: Show All Predicted Edits"
+      },
+      {
+        "command": "sonec.toggleEnabled",
+        "title": "SONEC: Toggle Enable/Disable"
+      },
+      {
+        "command": "sonec.clearCache",
+        "title": "SONEC: Clear Cache"
+      },
+      {
+        "command": "sonec.reindexProject",
+        "title": "SONEC: Re-index Project"
+      },
+      {
+        "command": "sonec.openSettings",
+        "title": "SONEC: Open Settings",
+        "icon": "$(gear)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "sonec.acceptWord",
+        "key": "ctrl+right",
+        "mac": "cmd+right",
+        "when": "inlineSuggestionVisible && editorTextFocus"
+      },
+      {
+        "command": "sonec.acceptLine",
+        "key": "ctrl+shift+right",
+        "mac": "cmd+shift+right",
+        "when": "inlineSuggestionVisible && editorTextFocus"
+      },
+      {
+        "command": "sonec.jumpToNextEdit",
+        "key": "ctrl+]",
+        "mac": "cmd+]",
+        "when": "sonec.hasNextEdit && editorTextFocus"
+      },
+      {
+        "command": "sonec.jumpToPrevEdit",
+        "key": "ctrl+[",
+        "mac": "cmd+[",
+        "when": "sonec.hasPrevEdit && editorTextFocus"
+      },
+      {
+        "command": "sonec.applyTransformation",
+        "key": "ctrl+shift+enter",
+        "mac": "cmd+shift+enter",
+        "when": "sonec.transformationReady && editorTextFocus"
+      },
+      {
+        "command": "sonec.triggerCompletion",
+        "key": "ctrl+space",
+        "mac": "ctrl+space",
+        "when": "editorTextFocus && !suggestWidgetVisible"
+      }
+    ],
+    "configuration": {
+      "title": "SONEC",
+      "properties": {
+        "sonec.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable SONEC autonomous code engine"
+        },
+        "sonec.provider": {
+          "type": "string",
+          "default": "ollama",
+          "enum": [
+            "openai",
+            "anthropic",
+            "ollama",
+            "custom"
+          ],
+          "description": "AI model provider"
+        },
+        "sonec.model": {
+          "type": "string",
+          "default": "qwen2.5-coder:1.5b",
+          "description": "Model identifier for the selected provider"
+        },
+        "sonec.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for the model provider (use SONEC: Open Settings for secure entry)"
+        },
+        "sonec.apiEndpoint": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Custom API endpoint (for ollama or custom providers)"
+        },
+        "sonec.maxContextTokens": {
+          "type": "number",
+          "default": 8192,
+          "description": "Maximum context window tokens to send to the model"
+        },
+        "sonec.debounceMs": {
+          "type": "number",
+          "default": 150,
+          "description": "Debounce delay in milliseconds before triggering completion"
+        },
+        "sonec.prefetchEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable speculative prefetching of completions"
+        },
+        "sonec.multiFileEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable multi-file edit suggestions"
+        },
+        "sonec.maxCompletionLines": {
+          "type": "number",
+          "default": 50,
+          "description": "Maximum number of lines in a single completion"
+        },
+        "sonec.streamingEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable streaming completions for lower perceived latency"
+        },
+        "sonec.cacheEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable completion and context caching"
+        },
+        "sonec.cacheTTLSeconds": {
+          "type": "number",
+          "default": 300,
+          "description": "Cache time-to-live in seconds"
+        },
+        "sonec.styleLearnEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable project style and pattern learning"
+        },
+        "sonec.telemetryEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable anonymous usage telemetry"
+        },
+        "sonec.logLevel": {
+          "type": "string",
+          "default": "info",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
+          "description": "Logging level"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/lru-cache": "^7.10.10",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "eslint": "^8.56.0",
+    "glob": "^10.3.10",
+    "mocha": "^10.2.0",
+    "typescript": "^5.3.3",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.22.0"
+  },
+  "dependencies": {
+    "lru-cache": "^10.1.0",
+    "web-tree-sitter": "^0.20.8",
+    "xxhash-wasm": "^1.0.2"
+  }
+}
