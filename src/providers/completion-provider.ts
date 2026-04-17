@@ -194,14 +194,12 @@ export class SonecCompletionProvider
 
     const item = new vscode.InlineCompletionItem(completion.insertText, range);
     
-    // Attach the action for multi-file coordination if it exists
-    if (this.predictionEngine.getSpeculativePlan()) {
-        item.command = {
-            title: 'Apply Multi-File Edits',
-            command: 'sonec.applySpeculativePlan',
-            arguments: [this.predictionEngine.getSpeculativePlan()]
-        };
-    }
+    // Command to trigger after acceptance
+    item.command = {
+        title: 'SONEC: Post-Acceptance Hook',
+        command: 'sonec.onCompletionAccepted',
+        arguments: [completion]
+    };
 
     return item;
   }

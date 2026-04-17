@@ -96,11 +96,6 @@
         "when": "inlineSuggestionVisible && editorTextFocus"
       },
       {
-        "command": "sonec.acceptSuggestion",
-        "key": "tab",
-        "when": "inlineSuggestionVisible && editorTextFocus"
-      },
-      {
         "command": "sonec.jumpToNextEdit",
         "key": "tab",
         "when": "sonec.hasNextEdit && !inlineSuggestionVisible && editorTextFocus"

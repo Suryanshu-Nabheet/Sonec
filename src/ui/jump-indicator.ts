@@ -10,32 +10,16 @@ import { Logger } from '../core/logger';
 
 export class JumpIndicatorManager implements vscode.Disposable {
   private logger = Logger.getInstance();
-  private decorationType: vscode.TextEditorDecorationType;
-  private promptDecorationType: vscode.TextEditorDecorationType;
+  private targetDecorationType: vscode.TextEditorDecorationType;
   private activeTarget: { file: string; position: vscode.Position } | null = null;
 
   constructor() {
-    this.decorationType = vscode.window.createTextEditorDecorationType({
-      before: {
-        contentText: ' TAB to jump here ',
-        backgroundColor: new vscode.ThemeColor('peekViewEditor.background'),
-        color: new vscode.ThemeColor('peekViewEditor.foreground'),
-        margin: '0 0.5em 0 0',
-        fontWeight: '600',
-        border: '1px solid #007acc',
-      },
-      isWholeLine: false,
-      rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
-    });
-
-    this.promptDecorationType = vscode.window.createTextEditorDecorationType({
-        after: {
-            contentText: ' (TAB to jump) ',
-            color: new vscode.ThemeColor('editorGhostText.foreground'),
-            fontStyle: 'italic',
-            backgroundColor: new vscode.ThemeColor('editor.lineHighlightBackground'),
-            margin: '0 0 0 1em',
-        }
+    this.targetDecorationType = vscode.window.createTextEditorDecorationType({
+      backgroundColor: new vscode.ThemeColor('editor.wordHighlightBackground'),
+      border: '1px solid #007acc',
+      borderRadius: '2px',
+      overviewRulerColor: new vscode.ThemeColor('editor.wordHighlightBackground'),
+      overviewRulerLane: vscode.OverviewRulerLane.Right,
     });
   }
 
@@ -68,17 +52,10 @@ export class JumpIndicatorManager implements vscode.Disposable {
     
     // Apply decorations to all visible editors
     for (const editor of vscode.window.visibleTextEditors) {
-        // 1. Target indicator (at the destination)
+        // Target indicator (at the destination) - HIGHLIGHT ONLY, NO TEXT
         if (editor.document.uri.fsPath === targetUri.fsPath) {
             const range = new vscode.Range(target.position, target.position);
-            editor.setDecorations(this.decorationType, [range]);
-        }
-        
-        // 2. Prompt indicator (at the current cursor)
-        if (this.activeTarget) {
-            const cursorPosition = editor.selection.active;
-            const range = new vscode.Range(cursorPosition, cursorPosition);
-            editor.setDecorations(this.promptDecorationType, [range]);
+            editor.setDecorations(this.targetDecorationType, [range]);
         }
     }
   }
@@ -102,14 +79,12 @@ export class JumpIndicatorManager implements vscode.Disposable {
    */
   public clearIndicators(): void {
     for (const editor of vscode.window.visibleTextEditors) {
-        editor.setDecorations(this.decorationType, []);
-        editor.setDecorations(this.promptDecorationType, []);
+        editor.setDecorations(this.targetDecorationType, []);
     }
   }
 
   public dispose(): void {
     this.clearIndicators();
-    this.decorationType.dispose();
-    this.promptDecorationType.dispose();
+    this.targetDecorationType.dispose();
   }
 }

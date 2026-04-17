@@ -93,7 +93,27 @@ export class CommandHandlers implements vscode.Disposable {
     this.register('sonec.reindexProject', () => this.reindexProject());
     this.register('sonec.openSettings', () => this.openSettings());
     this.register('sonec.autonomousFix', () => this.autonomousFix());
+    this.register('sonec.onCompletionAccepted', (completion) => this.onCompletionAccepted(completion));
     this.register('sonec.applySpeculativePlan', (plan) => this.applySpeculativePlan(plan));
+  }
+
+  /**
+   * Post-acceptance hook to trigger predictions and cleanup.
+   */
+  private async onCompletionAccepted(completion: any): Promise<void> {
+      this.logger.debug(`Completion accepted: ${completion.id}`);
+      
+      // Cleanup current completion state
+      this.completionProvider.dismiss();
+      
+      // If there is a speculative plan attached, offer to apply it
+      const plan = this.predictionEngine.getSpeculativePlan();
+      if (plan && plan.actions.length > 0) {
+          vscode.commands.executeCommand('setContext', 'sonec.transformationReady', true);
+      }
+
+      // Immediately trigger predictive trajectory update
+      await this.generateNextEditPredictions();
   }
 
   /**
