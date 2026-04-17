@@ -205,27 +205,6 @@ export class CommandHandlers implements vscode.Disposable {
       type: 'next_edit_jumped',
       data: target
     });
-
-    // Show inline hint about the jump
-    const decoration = vscode.window.createTextEditorDecorationType({
-      after: {
-        contentText: ` <- Predicted Edit`,
-        color: new vscode.ThemeColor(
-          'editorGhostText.foreground'
-        ),
-        fontStyle: 'italic',
-      },
-    });
-
-    const editor = vscode.window.activeTextEditor;
-    if (editor) {
-      editor.setDecorations(decoration, [
-        new vscode.Range(target.position, target.position),
-      ]);
-
-      // Remove decoration after 3 seconds
-      setTimeout(() => decoration.dispose(), 3000);
-    }
   }
 
   /**
