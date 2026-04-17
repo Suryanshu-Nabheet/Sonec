@@ -40,14 +40,24 @@ export class JumpIndicatorManager implements vscode.Disposable {
     }
 
     this.activeTarget = target;
-    const wsFolder = vscode.workspace.workspaceFolders?.[0];
-    if (!wsFolder) {return;}
-
-    const targetUri = vscode.Uri.joinPath(wsFolder.uri, target.file);
+    
+    // Resolve target URI robustly
+    let targetUri: vscode.Uri;
+    try {
+        if (vscode.Uri.parse(target.file).scheme !== 'file' && !target.file.startsWith('/') && !target.file.includes(':')) {
+            const wsFolder = vscode.workspace.workspaceFolders?.[0];
+            targetUri = wsFolder ? vscode.Uri.joinPath(wsFolder.uri, target.file) : vscode.Uri.file(target.file);
+        } else {
+            targetUri = vscode.Uri.file(target.file);
+        }
+    } catch {
+        const wsFolder = vscode.workspace.workspaceFolders?.[0];
+        targetUri = wsFolder ? vscode.Uri.joinPath(wsFolder.uri, target.file) : vscode.Uri.file(target.file);
+    }
     
     // Apply decoration to all visible editors that match the target URI
     for (const editor of vscode.window.visibleTextEditors) {
-        if (editor.document.uri.toString() === targetUri.toString()) {
+        if (editor.document.uri.fsPath === targetUri.fsPath) {
             const range = new vscode.Range(target.position, target.position);
             editor.setDecorations(this.decorationType, [range]);
         }

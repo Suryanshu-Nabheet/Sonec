@@ -240,20 +240,20 @@ function setupDocumentListeners(
     })
   );
 
-  // When active editor changes, prepare context
+  // When active editor changes, refresh context and predictions
   disposables.push(
-    vscode.window.onDidChangeActiveTextEditor((editor) => {
+    vscode.window.onDidChangeActiveTextEditor(async (editor) => {
       if (editor) {
-        logger.debug(`Active editor changed: ${editor.document.fileName}`);
-
-        // Pre-warm context for the new file
         const cts = new vscode.CancellationTokenSource();
-        setTimeout(() => cts.cancel(), 3000);
-
-        contextEngine
-          .buildContext(editor.document, editor.selection.active, cts.token)
-          .catch(() => {/* Pre-warming is non-critical */})
-          .finally(() => cts.dispose());
+        setTimeout(() => cts.cancel(), 5000);
+        try {
+            const context = await contextEngine.buildContext(editor.document, editor.selection.active, cts.token);
+            await _predictionEngine.predictNextEdits(context, cts.token);
+        } catch {
+            // Background update
+        } finally {
+            cts.dispose();
+        }
       }
     })
   );
@@ -269,12 +269,23 @@ function setupDocumentListeners(
       const config = ConfigManager.getInstance();
       if (!config.getValue('enabled')) {return;}
 
-      // Trigger proactive completions after a short idle period
+      // Trigger proactive completions and trajectory updates after a short idle period
       const debounceMs = config.getValue('debounceMs');
-      selectionTimer = setTimeout(() => {
+      selectionTimer = setTimeout(async () => {
         const editor = vscode.window.activeTextEditor;
         if (editor && editor.document === event.textEditor.document && editor.selection.isEmpty) {
           vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
+          
+          // Background predictive pathing - populates jump targets
+          try {
+              const cts = new vscode.CancellationTokenSource();
+              setTimeout(() => cts.cancel(), 5000);
+              const context = await contextEngine.buildContext(editor.document, editor.selection.active, cts.token);
+              await _predictionEngine.predictNextEdits(context, cts.token);
+              cts.dispose();
+          } catch {
+              // Non-blocking background worker
+          }
         }
       }, debounceMs);
     })

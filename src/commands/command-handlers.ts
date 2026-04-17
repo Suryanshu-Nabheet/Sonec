@@ -115,7 +115,10 @@ export class CommandHandlers implements vscode.Disposable {
    */
   private async acceptSuggestion(): Promise<void> {
     const accepted = await this.completionProvider.acceptFull();
-    if (!accepted) {
+    if (accepted) {
+        // Immediately trigger predictive trajectory update after acceptance
+        this.generateNextEditPredictions().catch(() => {});
+    } else {
       // Fallback: let VS Code handle Tab normally
       await vscode.commands.executeCommand('tab');
     }
@@ -262,9 +265,15 @@ export class CommandHandlers implements vscode.Disposable {
     position: vscode.Position
   ): Promise<void> {
     const wsFolder = vscode.workspace.workspaceFolders?.[0];
-    if (!wsFolder) {return;}
-
-    const uri = vscode.Uri.joinPath(wsFolder.uri, filePath);
+    
+    let uri: vscode.Uri;
+    if (filePath.startsWith('/') || filePath.includes(':')) {
+        uri = vscode.Uri.file(filePath);
+    } else if (wsFolder) {
+        uri = vscode.Uri.joinPath(wsFolder.uri, filePath);
+    } else {
+        uri = vscode.Uri.file(filePath);
+    }
 
     try {
       const doc = await vscode.workspace.openTextDocument(uri);
