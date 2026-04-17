@@ -64,6 +64,7 @@ import { SonecCompletionProvider } from './providers/completion-provider';
 import { CommandHandlers } from './commands/command-handlers';
 import { PerformanceMonitor } from './performance/performance-monitor';
 import { SettingsPanel } from './settings/settings-panel';
+import { AutonomousRefactorEngine } from './prediction/refactor-engine';
 
 /** All disposables created during activation */
 let disposables: vscode.Disposable[] = [];
@@ -109,7 +110,11 @@ export function activate(context: vscode.ExtensionContext): void {
   const perfMonitor = new PerformanceMonitor();
   disposables.push(perfMonitor);
 
-  // ─── 7. Initialize Completion Provider ───
+  // ─── 7. Initialize Autonomous Refactor Engine ───
+  const refactorEngine = new AutonomousRefactorEngine(predictionEngine, contextEngine);
+  disposables.push(refactorEngine);
+
+  // ─── 8. Initialize Completion Provider ───
   const completionProvider = new SonecCompletionProvider(
     contextEngine,
     predictionEngine,
@@ -130,6 +135,7 @@ export function activate(context: vscode.ExtensionContext): void {
     actionEngine,
     completionProvider,
     perfMonitor,
+    refactorEngine,
     context.extensionUri
   );
   disposables.push(commandHandlers);

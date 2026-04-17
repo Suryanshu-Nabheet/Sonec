@@ -242,6 +242,13 @@ export class PredictionEngine implements vscode.Disposable {
   }
 
   /**
+   * Get all currently stored next-edit predictions.
+   */
+  public getNextEditPredictions(): NextEditPrediction[] {
+      return this.nextEditPredictions;
+  }
+
+  /**
    * Get pending predicted edits for a file.
    * @param filePath The absolute path to the file
    * @returns An array of predicted edits

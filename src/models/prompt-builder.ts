@@ -8,6 +8,7 @@
  * not raw text completions.
  */
 
+import * as vscode from 'vscode';
 import {
   ProjectContext,
   ProjectStyle,
@@ -239,10 +240,14 @@ Constants: ${conventions.constants}
     userIntent?: string
   ): string {
     const intent = userIntent || 'Complete or improve the code at the cursor position';
+    const diagnostics = context.currentFile.file.uri ? vscode.languages.getDiagnostics(context.currentFile.file.uri) : [];
+    const errorContext = diagnostics.length > 0 
+      ? `\nDetected issues in current file:\n${diagnostics.map((d: vscode.Diagnostic) => `- [${d.range.start.line}:${d.range.start.character}] ${d.message}`).join('\n')}`
+      : '';
 
     return `<instruction>
 Analyze the code and produce a structured edit plan as JSON.
-Intent: ${intent}
+Intent: ${intent}${errorContext}
 
 Output format:
 {
@@ -260,7 +265,26 @@ Rules:
 - Include confidence scores (0-1)
 - Be precise with line/character positions
 - Cross-file edits are allowed
+- If there are syntax or formatting issues, prioritize fixing them.
 </instruction>`;
+  }
+
+  public buildRefactorPrompt(context: ProjectContext, issues: string[]): string {
+    const sections: string[] = [];
+    sections.push(this.buildSystemSection());
+    sections.push(this.buildStyleSection(context.projectStyle));
+    sections.push(this.buildCurrentFileSection(context));
+    
+    const issueBlock = `<detected_issues>\n${issues.join('\n')}\n</detected_issues>`;
+    sections.push(issueBlock);
+    
+    sections.push(`<instruction>
+You are an autonomous refactoring engine. Your goal is to fix the detected issues and improve the code quality.
+Produce a structured edit plan as JSON with actions to fix these issues.
+Output format same as transformation plan.
+</instruction>`);
+
+    return sections.filter(Boolean).join('\n\n');
   }
 
   private buildNextEditInstruction(): string {

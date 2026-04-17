@@ -19,6 +19,7 @@ import { ActionExecutionEngine } from '../execution/action-engine';
 import { SonecCompletionProvider } from '../providers/completion-provider';
 import { PerformanceMonitor } from '../performance/performance-monitor';
 import { SettingsPanel } from '../settings/settings-panel';
+import { AutonomousRefactorEngine } from '../prediction/refactor-engine';
 
 /**
  * Manages the registration and execution of user-facing commands.
@@ -33,6 +34,7 @@ export class CommandHandlers implements vscode.Disposable {
   private actionEngine: ActionExecutionEngine;
   private completionProvider: SonecCompletionProvider;
   private perfMonitor: PerformanceMonitor;
+  private refactorEngine: AutonomousRefactorEngine;
   private extensionUri: vscode.Uri;
 
   /** Index of current next-edit prediction */
@@ -44,6 +46,7 @@ export class CommandHandlers implements vscode.Disposable {
     actionEngine: ActionExecutionEngine,
     completionProvider: SonecCompletionProvider,
     perfMonitor: PerformanceMonitor,
+    refactorEngine: AutonomousRefactorEngine,
     extensionUri: vscode.Uri
   ) {
     this.logger = Logger.getInstance();
@@ -54,9 +57,22 @@ export class CommandHandlers implements vscode.Disposable {
     this.actionEngine = actionEngine;
     this.completionProvider = completionProvider;
     this.perfMonitor = perfMonitor;
+    this.refactorEngine = refactorEngine;
     this.extensionUri = extensionUri;
 
     this.registerCommands();
+  }
+
+  /**
+   * Triggers an autonomous code scan and fix.
+   */
+  private async autonomousFix(): Promise<void> {
+      await vscode.window.withProgress({
+          location: vscode.ProgressLocation.Window,
+          title: 'SONEC: Autonomous fixing...'
+      }, async () => {
+          await this.refactorEngine.scanAndRefactor();
+      });
   }
 
   /**
@@ -76,6 +92,7 @@ export class CommandHandlers implements vscode.Disposable {
     this.register('sonec.clearCache', () => this.clearCache());
     this.register('sonec.reindexProject', () => this.reindexProject());
     this.register('sonec.openSettings', () => this.openSettings());
+    this.register('sonec.autonomousFix', () => this.autonomousFix());
     this.register('sonec.applySpeculativePlan', (plan) => this.applySpeculativePlan(plan));
   }
 
@@ -351,18 +368,27 @@ export class CommandHandlers implements vscode.Disposable {
    */
   private async showPredictedEdits(): Promise<void> {
     const metrics = this.perfMonitor.getMetrics();
+    const predictions = this.predictionEngine.getNextEditPredictions() || [];
     const target = this.predictionEngine.getJumpTarget();
 
     const items: vscode.QuickPickItem[] = [
       {
         label: 'Performance Metrics',
-        description: `Avg: \${Math.round(metrics.averageLatencyMs)}ms | P95: \${Math.round(metrics.p95LatencyMs)}ms | Acceptance: \${Math.round(metrics.acceptanceRate * 100)}%`,
+        description: `Avg: \${Math.round(metrics.averageLatencyMs)}ms | Acceptance: \${Math.round(metrics.acceptanceRate * 100)}%`,
         kind: vscode.QuickPickItemKind.Default,
       },
-      { label: '', kind: vscode.QuickPickItemKind.Separator },
+      { label: 'Predicted Next Steps', kind: vscode.QuickPickItemKind.Separator },
     ];
 
-    if (target) {
+    if (predictions.length > 0) {
+        for (const p of predictions) {
+            items.push({
+                label: `Jump to \${p.file}:\${p.position.line + 1}`,
+                description: `Confidence: \${(p.confidence * 100).toFixed(0)}%`,
+                detail: p.reason,
+            });
+        }
+    } else if (target) {
         items.push({
           label: `Edit Target: \${target.file}:\${target.position.line + 1}`,
           description: 'Top predicted next edit',
@@ -371,7 +397,7 @@ export class CommandHandlers implements vscode.Disposable {
     } else {
       items.push({
         label: 'No predictions available',
-        description: 'Trigger next-edit prediction via commands',
+        description: 'Trigger next-edit prediction via commands (Cmd+])',
       });
     }
 
