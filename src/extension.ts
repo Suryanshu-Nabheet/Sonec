@@ -260,34 +260,43 @@ function setupDocumentListeners(
 
   // Track cursor movement for proactive suggestions and trajectory updates
   let selectionTimer: NodeJS.Timeout | null = null;
+  let pathingTimer: NodeJS.Timeout | null = null;
   disposables.push(
     vscode.window.onDidChangeTextEditorSelection((event) => {
       if (selectionTimer) {
         clearTimeout(selectionTimer);
       }
+      if (pathingTimer) {
+          clearTimeout(pathingTimer);
+      }
 
       const config = ConfigManager.getInstance();
       if (!config.getValue('enabled')) {return;}
 
-      // Trigger proactive completions and trajectory updates after a short idle period
+      // 1. Proactive Code Completion Trigger
       const debounceMs = config.getValue('debounceMs');
-      selectionTimer = setTimeout(async () => {
+      selectionTimer = setTimeout(() => {
         const editor = vscode.window.activeTextEditor;
         if (editor && editor.document === event.textEditor.document && editor.selection.isEmpty) {
           vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
-          
-          // Background predictive pathing - populates jump targets
-          try {
-              const cts = new vscode.CancellationTokenSource();
-              setTimeout(() => cts.cancel(), 5000);
-              const context = await contextEngine.buildContext(editor.document, editor.selection.active, cts.token);
-              await _predictionEngine.predictNextEdits(context, cts.token);
-              cts.dispose();
-          } catch {
-              // Non-blocking background worker
-          }
         }
       }, debounceMs);
+
+      // 2. Background Trajectory Update (Much slower, non-blocking)
+      pathingTimer = setTimeout(async () => {
+          const editor = vscode.window.activeTextEditor;
+          if (editor && editor.document === event.textEditor.document && editor.selection.isEmpty) {
+              try {
+                  const cts = new vscode.CancellationTokenSource();
+                  setTimeout(() => cts.cancel(), 3000);
+                  const context = await contextEngine.buildContext(editor.document, editor.selection.active, cts.token);
+                  await _predictionEngine.predictNextEdits(context, cts.token);
+                  cts.dispose();
+              } catch {
+                  // Silent
+              }
+          }
+      }, 2000); // Only update trajectory after 2 seconds of idleness
     })
   );
 }
