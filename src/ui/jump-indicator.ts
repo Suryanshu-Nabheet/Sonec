@@ -11,7 +11,7 @@ import { Logger } from '../core/logger';
 export class JumpIndicatorManager implements vscode.Disposable {
   private logger = Logger.getInstance();
   private decorationType: vscode.TextEditorDecorationType;
-  private currentDecorations: Map<string, vscode.Range[]> = new Map();
+  private promptDecorationType: vscode.TextEditorDecorationType;
   private activeTarget: { file: string; position: vscode.Position } | null = null;
 
   constructor() {
@@ -22,9 +22,20 @@ export class JumpIndicatorManager implements vscode.Disposable {
         color: new vscode.ThemeColor('peekViewEditor.foreground'),
         margin: '0 0.5em 0 0',
         fontWeight: '600',
+        border: '1px solid #007acc',
       },
       isWholeLine: false,
       rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
+    });
+
+    this.promptDecorationType = vscode.window.createTextEditorDecorationType({
+        after: {
+            contentText: ' (TAB to jump) ',
+            color: new vscode.ThemeColor('editorGhostText.foreground'),
+            fontStyle: 'italic',
+            backgroundColor: new vscode.ThemeColor('editor.lineHighlightBackground'),
+            margin: '0 0 0 1em',
+        }
     });
   }
 
@@ -55,11 +66,19 @@ export class JumpIndicatorManager implements vscode.Disposable {
         targetUri = wsFolder ? vscode.Uri.joinPath(wsFolder.uri, target.file) : vscode.Uri.file(target.file);
     }
     
-    // Apply decoration to all visible editors that match the target URI
+    // Apply decorations to all visible editors
     for (const editor of vscode.window.visibleTextEditors) {
+        // 1. Target indicator (at the destination)
         if (editor.document.uri.fsPath === targetUri.fsPath) {
             const range = new vscode.Range(target.position, target.position);
             editor.setDecorations(this.decorationType, [range]);
+        }
+        
+        // 2. Prompt indicator (at the current cursor)
+        if (this.activeTarget) {
+            const cursorPosition = editor.selection.active;
+            const range = new vscode.Range(cursorPosition, cursorPosition);
+            editor.setDecorations(this.promptDecorationType, [range]);
         }
     }
   }
@@ -84,11 +103,13 @@ export class JumpIndicatorManager implements vscode.Disposable {
   public clearIndicators(): void {
     for (const editor of vscode.window.visibleTextEditors) {
         editor.setDecorations(this.decorationType, []);
+        editor.setDecorations(this.promptDecorationType, []);
     }
   }
 
   public dispose(): void {
     this.clearIndicators();
     this.decorationType.dispose();
+    this.promptDecorationType.dispose();
   }
 }
