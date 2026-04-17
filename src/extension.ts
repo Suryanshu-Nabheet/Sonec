@@ -65,6 +65,7 @@ import { CommandHandlers } from './commands/command-handlers';
 import { PerformanceMonitor } from './performance/performance-monitor';
 import { SettingsPanel } from './settings/settings-panel';
 import { AutonomousRefactorEngine } from './prediction/refactor-engine';
+import { JumpIndicatorManager } from './ui/jump-indicator';
 
 /** All disposables created during activation */
 let disposables: vscode.Disposable[] = [];
@@ -114,7 +115,11 @@ export function activate(context: vscode.ExtensionContext): void {
   const refactorEngine = new AutonomousRefactorEngine(predictionEngine, contextEngine);
   disposables.push(refactorEngine);
 
-  // ─── 8. Initialize Completion Provider ───
+  // ─── 8. Initialize UI Components ───
+  const jumpIndicator = new JumpIndicatorManager();
+  disposables.push(jumpIndicator);
+
+  // ─── 9. Initialize Completion Provider ───
   const completionProvider = new SonecCompletionProvider(
     contextEngine,
     predictionEngine,
@@ -140,7 +145,19 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   disposables.push(commandHandlers);
 
-  // ─── 9. Set up Document Event Listeners ───
+  // ─── 9. Set up Domain Event Listeners ───
+  EventBus.getInstance().on('next_edits_updated', (event: any) => {
+      const topPrediction = predictionEngine.getJumpTarget();
+      jumpIndicator.updateIndicator(topPrediction);
+      vscode.commands.executeCommand('setContext', 'sonec.hasNextEdit', !!topPrediction);
+  });
+
+  EventBus.getInstance().on('action_applied', (event: any) => {
+      jumpIndicator.clearIndicators();
+      vscode.commands.executeCommand('setContext', 'sonec.hasNextEdit', false);
+  });
+
+  // ─── 10. Set up Document Event Listeners ───
   setupDocumentListeners(contextEngine, predictionEngine);
 
   // ─── 10. Set Initial Context Keys ───

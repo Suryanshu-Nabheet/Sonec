@@ -391,6 +391,7 @@ export type SonecEvent =
   | { type: 'next_edit_jumped'; data: { file: string; position: vscode.Position } }
   | { type: 'context_rebuilt'; data: { tokenCount: number; latencyMs: number } }
   | { type: 'cache_hit'; data: { key: string } }
+  | { type: 'next_edits_updated'; data: { predictions: NextEditPrediction[] } }
   | { type: 'error'; data: { message: string; stack?: string } };
 
 /**

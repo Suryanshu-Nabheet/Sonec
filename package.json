@@ -97,6 +97,11 @@
       },
       {
         "command": "sonec.jumpToNextEdit",
+        "key": "tab",
+        "when": "sonec.hasNextEdit && !inlineSuggestionVisible && editorTextFocus"
+      },
+      {
+        "command": "sonec.jumpToNextEdit",
         "key": "ctrl+]",
         "mac": "cmd+]",
         "when": "sonec.hasNextEdit && editorTextFocus"

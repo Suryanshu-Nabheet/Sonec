@@ -221,6 +221,11 @@ export class PredictionEngine implements vscode.Disposable {
       const predictions = this.parseNextEditPredictions(response.text);
       this.nextEditPredictions = predictions;
 
+      this.eventBus.emit({
+          type: 'next_edits_updated',
+          data: { predictions }
+      } as any);
+
       timer();
       return predictions;
     } catch (err) {
