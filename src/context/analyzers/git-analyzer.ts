@@ -59,7 +59,7 @@ export class GitAnalyzer {
             diffs.push(diff);
           }
         } catch (err) {
-          this.logger.warn(`Failed to diff file: \${change.uri.fsPath}`);
+          this.logger.warn(`Failed to diff file: ${change.uri.fsPath}`);
         }
       }
 
@@ -123,7 +123,7 @@ export class GitAnalyzer {
 
       return { filePath, hunks };
     } catch (err) {
-      this.logger.debug(`Error parsing diff for \${change.uri.fsPath}: \${err}`);
+      this.logger.debug(`Error parsing diff for ${change.uri.fsPath}: ${err}`);
       return null;
     }
   }

@@ -74,6 +74,7 @@ let disposables: vscode.Disposable[] = [];
  * Extension activation — called when VS Code loads SONEC
  */
 export function activate(context: vscode.ExtensionContext): void {
+  console.log('SONEC: Activating...');
   // ─── 1. Initialize Core Singletons ───
   const logger = Logger.getInstance();
   const config = ConfigManager.getInstance();
@@ -144,6 +145,16 @@ export function activate(context: vscode.ExtensionContext): void {
     context.extensionUri
   );
   disposables.push(commandHandlers);
+
+  // Register status check command
+  disposables.push(vscode.commands.registerCommand('sonec.checkStatus', async () => {
+    const status = await modelLayer.checkStatus();
+    if (status.ok) {
+        vscode.window.showInformationMessage(`SONEC Status: OK. Provider: ${status.provider}, Model: ${status.model}`);
+    } else {
+        vscode.window.showErrorMessage(`SONEC Status: ERROR. ${status.error}`);
+    }
+  }));
 
   // ─── 9. Set up Domain Event Listeners ───
   EventBus.getInstance().on('next_edits_updated', (event: any) => {

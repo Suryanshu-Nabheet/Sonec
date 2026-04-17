@@ -97,7 +97,7 @@ export class SonecCompletionProvider
 
       // Speculative latency reduction
       // If we have a prefetch for this exact position, use it immediately
-      const prefetchKey = `\${document.uri.fsPath}:\${position.line}:\${position.character}`;
+      const prefetchKey = `${document.uri.fsPath}:${position.line}:${position.character}`;
       if (this.prefetchResult && this.prefetchResult.key === prefetchKey) {
         this.logger.debug('Using prefetched completion');
         return [this.createInlineItem(this.prefetchResult.result, position, document)];
@@ -122,6 +122,7 @@ export class SonecCompletionProvider
       );
 
       if (!completion || token.isCancellationRequested) {
+        this.logger.debug('No completion generated or cancellation requested');
         return null;
       }
 
@@ -145,7 +146,7 @@ export class SonecCompletionProvider
       });
 
       this.logger.debug(
-        `Completion provided: \${completion.insertText.length} chars, \${latency}ms, confidence: \${completion.confidence.toFixed(2)}`
+        `Completion provided: ${completion.insertText.length} chars, ${latency}ms, confidence: ${completion.confidence.toFixed(2)}`
       );
 
       // Trigger prefetch for likely next position
@@ -361,9 +362,9 @@ export class SonecCompletionProvider
         );
 
         if (result) {
-          const key = `\${document.uri.fsPath}:\${nextPosition.line}:\${nextPosition.character}`;
+          const key = `${document.uri.fsPath}:${nextPosition.line}:${nextPosition.character}`;
           this.prefetchResult = { key, result };
-          this.logger.debug(`Prefetched completion for \${key}`);
+          this.logger.debug(`Prefetched completion for ${key}`);
         }
 
         cts.dispose();

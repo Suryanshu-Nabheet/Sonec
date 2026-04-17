@@ -29,7 +29,7 @@ export class EmbeddingManager implements vscode.Disposable {
      */
     public async getEmbedding(text: string): Promise<number[]> {
         // Implementation would call a local or remote embedding model
-        this.logger.debug(`Generating embedding for text block (length: \${text.length})`);
+        this.logger.debug(`Generating embedding for text block (length: ${text.length})`);
         return new Array(768).fill(0); // Placeholder vector
     }
 
@@ -40,7 +40,7 @@ export class EmbeddingManager implements vscode.Disposable {
      * @returns A promise that resolves to an array of similar code locations
      */
     public async findSimilar(query: string, limit: number = 5): Promise<vscode.Location[]> {
-        this.logger.info(`Searching for code semantically similar to: \${query.slice(0, 50)}...`);
+        this.logger.info(`Searching for code semantically similar to: ${query.slice(0, 50)}...`);
         return [];
     }
 

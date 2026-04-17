@@ -31,11 +31,11 @@ export class StyleAnalyzer {
    * @param actual The actual code string that was generated
    */
   public recordCorrection(expected: string, actual: string): void {
-    const correction = `\${actual} -> \${expected}`;
+    const correction = `${actual} -> ${expected}`;
     if (!this.styleRejections.includes(correction)) {
       this.styleRejections.unshift(correction);
       if (this.styleRejections.length > 5) this.styleRejections.pop();
-      this.logger.info(`Style correction recorded: \${correction}`);
+      this.logger.info(`Style correction recorded: ${correction}`);
     }
   }
 

@@ -85,7 +85,7 @@ export class SymbolAnalyzer {
 
       return this.flattenSymbols(symbols, document.uri.fsPath);
     } catch (err) {
-        this.logger.debug(`Document symbol provider failed for \${document.uri.fsPath}`);
+        this.logger.debug(`Document symbol provider failed for ${document.uri.fsPath}`);
         return [];
     }
   }

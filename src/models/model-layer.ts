@@ -28,6 +28,7 @@ interface ProviderAdapter {
     callback: StreamCallback,
     token?: vscode.CancellationToken
   ): Promise<ModelResponse>;
+  checkStatus(): Promise<{ ok: boolean; error?: string }>;
 }
 
 export class ModelLayer implements vscode.Disposable {
@@ -42,6 +43,21 @@ export class ModelLayer implements vscode.Disposable {
     this.config = ConfigManager.getInstance();
     this.logger = Logger.getInstance();
     this.initAdapters();
+  }
+
+  /**
+   * Check the health/connectivity of the current model provider
+   */
+  async checkStatus(): Promise<{ ok: boolean; provider: string; model: string; error?: string }> {
+      const adapter = this.getAdapter();
+      const provider = this.config.getValue('provider');
+      const model = this.config.getValue('model');
+      try {
+          const result = await adapter.checkStatus();
+          return { ok: result.ok, provider, model, error: result.error };
+      } catch (err: any) {
+          return { ok: false, provider, model, error: err.message };
+      }
   }
 
   private initAdapters(): void {
@@ -60,9 +76,11 @@ export class ModelLayer implements vscode.Disposable {
     const timer = this.logger.time('ModelLayer.complete');
 
     try {
+      this.logger.debug(`Sending model request (${request.prompt.length} chars)`);
       const response = await adapter.complete(request);
       timer();
       this.requestCount++;
+      this.logger.debug(`Model response received (${response.text.length} chars)`);
       return response;
     } catch (err) {
       timer();
@@ -278,6 +296,23 @@ class OpenAIAdapter implements ProviderAdapter {
       latencyMs,
     };
   }
+
+  async checkStatus(): Promise<{ ok: boolean; error?: string }> {
+      try {
+          const endpoint = this.config.getEndpoint();
+          const apiKey = this.config.getValue('apiKey');
+          if (!apiKey && this.config.getValue('provider') === 'openai') {
+              return { ok: false, error: 'API Key missing for OpenAI' };
+          }
+          const response = await fetch(`${endpoint}/models`, {
+              headers: { Authorization: `Bearer ${apiKey}` }
+          });
+          if (response.ok) {return { ok: true };}
+          return { ok: false, error: `OpenAI API error: ${response.status}` };
+      } catch (err: any) {
+          return { ok: false, error: err.message };
+      }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -428,6 +463,31 @@ class AnthropicAdapter implements ProviderAdapter {
       latencyMs,
     };
   }
+
+  async checkStatus(): Promise<{ ok: boolean; error?: string }> {
+      try {
+          const endpoint = this.config.getEndpoint();
+          const apiKey = this.config.getValue('apiKey');
+          if (!apiKey && this.config.getValue('provider') === 'anthropic') {
+              return { ok: false, error: 'API Key missing for Anthropic' };
+          }
+          const response = await fetch(`${endpoint}/messages`, {
+              method: 'POST',
+              headers: { 
+                  'x-api-key': apiKey,
+                  'anthropic-version': '2023-06-01',
+                  'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ model: 'ping', messages: [], max_tokens: 1 })
+          });
+          if (response.status === 401 || response.status === 403) {
+              return { ok: false, error: `Anthropic Auth error: ${response.status}` };
+          }
+          return { ok: true };
+      } catch (err: any) {
+          return { ok: false, error: err.message };
+      }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -565,12 +625,30 @@ class OllamaAdapter implements ProviderAdapter {
   }
 
   private buildOllamaPrompt(request: ModelRequest): string {
+    // If it's a FIM prompt, send it raw
+    if (request.prompt.includes('<|fim_prefix|>')) {
+      return request.prompt;
+    }
+
     let prompt = '';
     if (request.systemPrompt) {
       prompt += `### System\n${request.systemPrompt}\n\n`;
     }
     prompt += `### User\n${request.prompt}\n\n### Assistant\n`;
     return prompt;
+  }
+
+  async checkStatus(): Promise<{ ok: boolean; error?: string }> {
+      try {
+          const endpoint = this.config.getEndpoint();
+          const response = await fetch(`${endpoint}/api/tags`);
+          if (response.ok) {
+              return { ok: true };
+          }
+          return { ok: false, error: `Ollama error: ${response.status}` };
+      } catch (err: any) {
+          return { ok: false, error: `Could not connect to Ollama at ${this.config.getEndpoint()}. Make sure it is running.` };
+      }
   }
 }
 
@@ -597,5 +675,10 @@ class CustomAdapter implements ProviderAdapter {
   ): Promise<ModelResponse> {
     const openaiAdapter = new OpenAIAdapter(this.config, this.logger);
     return openaiAdapter.stream(request, callback, token);
+  }
+
+  async checkStatus(): Promise<{ ok: boolean; error?: string }> {
+      const openaiAdapter = new OpenAIAdapter(this.config, this.logger);
+      return openaiAdapter.checkStatus();
   }
 }

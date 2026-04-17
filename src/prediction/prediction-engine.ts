@@ -76,51 +76,49 @@ export class PredictionEngine implements vscode.Disposable {
 
       // Build prompt
       let prompt: string;
-      const startTime = Date.now();
-      let completionText = '';
       const isFileEmpty = context.currentFile.precedingLines.trim().length === 0 && 
                           context.currentFile.followingLines.trim().length === 0 &&
-                          context.currentFile.linePrefix.trim().length === 0;
+                          context.currentFile.linePrefix.trim().length === 0 &&
+                          context.currentFile.lineSuffix.trim().length === 0;
 
       if (isFileEmpty) {
           this.logger.info('Empty file detected, using scaffold prompter');
           prompt = this.promptBuilder.buildScaffoldPrompt(context);
-          // Extensive code at start
-          completionText = (await this.modelLayer.complete({
-              prompt,
-              maxTokens: 2000,
-              temperature: 0.3,
-              stream: false
-          })).text;
       } else {
           prompt = this.promptBuilder.buildCompletionPrompt(context);
-          
-          if (this.config.getValue('streamingEnabled')) {
-            // Stream for lower perceived latency
-            await this.modelLayer.stream(
-              {
-                prompt,
-                systemPrompt: undefined,
-                maxTokens: this.calculateMaxTokens(context),
-                temperature: 0.1,
-                stopSequences: this.getStopSequences(context),
-                stream: true,
-              },
-              (chunk) => {
-                completionText += chunk.text;
-              },
-              token
-            );
-          } else {
-            const response = await this.modelLayer.complete({
-              prompt,
-              maxTokens: this.calculateMaxTokens(context),
-              temperature: 0.1,
-              stopSequences: this.getStopSequences(context),
-              stream: false,
-            });
-            completionText = response.text;
-          }
+      }
+
+      // Call model
+      const startTime = Date.now();
+      let completionText = '';
+      const maxTokens = isFileEmpty ? 2000 : this.calculateMaxTokens(context);
+      const temperature = isFileEmpty ? 0.3 : 0.1;
+
+      if (this.config.getValue('streamingEnabled')) {
+        // Stream for lower perceived latency
+        await this.modelLayer.stream(
+          {
+            prompt,
+            systemPrompt: undefined,
+            maxTokens,
+            temperature,
+            stopSequences: this.getStopSequences(context),
+            stream: true,
+          },
+          (chunk) => {
+            completionText += chunk.text;
+          },
+          token
+        );
+      } else {
+        const response = await this.modelLayer.complete({
+          prompt,
+          maxTokens,
+          temperature,
+          stopSequences: this.getStopSequences(context),
+          stream: false,
+        });
+        completionText = response.text;
       }
 
       if (token.isCancellationRequested || !completionText.trim()) {
@@ -515,7 +513,7 @@ export class PredictionEngine implements vscode.Disposable {
   private buildCacheKey(context: ProjectContext): string {
     const cursor = context.currentFile;
     // Use file path + position + preceding text hash as cache key
-    return `\${cursor.file.relativePath}:\${cursor.position.line}:\${cursor.position.character}:\${this.simpleHash(cursor.precedingLines.slice(-200) + cursor.linePrefix)}`;
+    return `${cursor.file.relativePath}:${cursor.position.line}:${cursor.position.character}:${this.simpleHash(cursor.precedingLines.slice(-200) + cursor.linePrefix)}`;
   }
 
   /**
@@ -597,7 +595,7 @@ export class PredictionEngine implements vscode.Disposable {
    * @returns A unique ID string
    */
   private generateId(): string {
-    return `sonec_\${Date.now()}_\${++this.idCounter}`;
+    return `sonec_${Date.now()}_${++this.idCounter}`;
   }
 
   /**
@@ -621,7 +619,7 @@ export class PredictionEngine implements vscode.Disposable {
         const plan = this.parseActionPlan(response.text);
         if (plan && plan.actions.length > 0) {
           this.speculativePlan = plan;
-          this.logger.debug(`Background speculation ready with \${plan.actions.length} actions`);
+          this.logger.debug(`Background speculation ready with ${plan.actions.length} actions`);
           
           // Show non-intrusive status to let user know transformation is ready
           vscode.commands.executeCommand('setContext', 'sonec.transformationReady', true);

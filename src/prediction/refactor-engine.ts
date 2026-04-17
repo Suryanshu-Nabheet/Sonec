@@ -53,7 +53,7 @@ export class AutonomousRefactorEngine implements vscode.Disposable {
     for (const editor of visibleEditors) {
         const diagnostics = vscode.languages.getDiagnostics(editor.document.uri);
         if (diagnostics.length > 0) {
-            allIssues.push(...diagnostics.map(d => `[\${editor.document.fileName}:L\${d.range.start.line}] \${d.message}`));
+            allIssues.push(...diagnostics.map(d => `[${editor.document.fileName}:L${d.range.start.line}] ${d.message}`));
             targetDocs.push(editor.document);
         }
     }
@@ -64,7 +64,7 @@ export class AutonomousRefactorEngine implements vscode.Disposable {
         // Proactive refactoring can still happen here
     }
 
-    this.logger.info(`Autonomous refactor triggered for \${targetDocs.length} files (\${allIssues.length} issues)`);
+    this.logger.info(`Autonomous refactor triggered for ${targetDocs.length} files (${allIssues.length} issues)`);
 
     try {
         const cts = new vscode.CancellationTokenSource();
@@ -81,7 +81,7 @@ export class AutonomousRefactorEngine implements vscode.Disposable {
             return {
                 file: relativePath,
                 position: diags[0].range.start,
-                reason: `Fix diagnostic issue: \${diags[0].message}`,
+                reason: `Fix diagnostic issue: ${diags[0].message}`,
                 confidence: 0.9
             };
         }).filter(Boolean) as any[];
@@ -92,20 +92,20 @@ export class AutonomousRefactorEngine implements vscode.Disposable {
 
         const plan = await this.predictionEngine.getTransformation(
             context,
-            `Fix the following issues across the open files and ensure architectural consistency: \${allIssues.length > 0 ? allIssues.join(', ') : 'Perform general code quality improvements and refactoring.'}`,
+            `Fix the following issues across the open files and ensure architectural consistency: ${allIssues.length > 0 ? allIssues.join(', ') : 'Perform general code quality improvements and refactoring.'}`,
             cts.token
         );
 
         if (plan && plan.actions.length > 0) {
             this.lastRefactorPlan = plan;
-            this.logger.info(`Autonomous refactor plan generated with \${plan.actions.length} actions`);
+            this.logger.info(`Autonomous refactor plan generated with ${plan.actions.length} actions`);
             
             // Notify via event bus or status bar (implemented in CommandHandlers/PerformanceMonitor)
             vscode.commands.executeCommand('setContext', 'sonec.transformationReady', true);
             
             // Non-intrusive notification
             vscode.window.showInformationMessage(
-                `SONEC: Autonomous refactor ready to fix \${diagnostics.length} issues.`,
+                `SONEC: Autonomous refactor ready to fix ${allIssues.length} issues.`,
                 'View Changes'
             ).then(selection => {
                 if (selection === 'View Changes') {

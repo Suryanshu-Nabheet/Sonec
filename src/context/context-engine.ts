@@ -190,7 +190,7 @@ export class ContextEngine implements vscode.Disposable {
       // Limit to 3 most relevant impacts to avoid token bloat
       return externalRefs.slice(0, 3).map(ref => {
         const relPath = vscode.workspace.asRelativePath(ref.uri);
-        return `Referenced in \${relPath}:L\${ref.range.start.line + 1}`;
+        return `Referenced in ${relPath}:L${ref.range.start.line + 1}`;
       });
     } catch {
       return [];

@@ -240,7 +240,7 @@ export class CommandHandlers implements vscode.Disposable {
           true
         );
         vscode.window.showInformationMessage(
-          `SONEC: Found \${predictions.length} predicted edit locations`
+          `SONEC: Found ${predictions.length} predicted edit locations`
         );
       } else {
         vscode.window.showInformationMessage(
@@ -279,7 +279,7 @@ export class CommandHandlers implements vscode.Disposable {
         vscode.TextEditorRevealType.InCenter
       );
     } catch (err) {
-      this.logger.error(`Failed to navigate to \${filePath}`, err);
+      this.logger.error(`Failed to navigate to ${filePath}`, err);
     }
   }
 
@@ -330,12 +330,12 @@ export class CommandHandlers implements vscode.Disposable {
           const actionSummary = plan.actions
             .map(
               (a) =>
-                `\${a.type}: \${a.file}\${a.description ? ' - ' + a.description : ''}`
+                `${a.type}: ${a.file}${a.description ? ' - ' + a.description : ''}`
             )
             .join('\n');
 
           const confirm = await vscode.window.showInformationMessage(
-            `SONEC: \${plan.actions.length} action(s) planned.\n\n\${actionSummary}`,
+            `SONEC: ${plan.actions.length} action(s) planned.\n\n${actionSummary}`,
             { modal: true },
             'Apply',
             'Cancel'
@@ -349,7 +349,7 @@ export class CommandHandlers implements vscode.Disposable {
 
           if (success) {
             vscode.window.showInformationMessage(
-              `SONEC: Applied \${plan.actions.length} action(s) successfully`
+              `SONEC: Applied ${plan.actions.length} action(s) successfully`
             );
           } else {
             vscode.window.showErrorMessage(
@@ -374,7 +374,7 @@ export class CommandHandlers implements vscode.Disposable {
     const items: vscode.QuickPickItem[] = [
       {
         label: 'Performance Metrics',
-        description: `Avg: \${Math.round(metrics.averageLatencyMs)}ms | Acceptance: \${Math.round(metrics.acceptanceRate * 100)}%`,
+        description: `Avg: ${Math.round(metrics.averageLatencyMs)}ms | Acceptance: ${Math.round(metrics.acceptanceRate * 100)}%`,
         kind: vscode.QuickPickItemKind.Default,
       },
       { label: 'Predicted Next Steps', kind: vscode.QuickPickItemKind.Separator },
@@ -383,14 +383,14 @@ export class CommandHandlers implements vscode.Disposable {
     if (predictions.length > 0) {
         for (const p of predictions) {
             items.push({
-                label: `Jump to \${p.file}:\${p.position.line + 1}`,
-                description: `Confidence: \${(p.confidence * 100).toFixed(0)}%`,
+                label: `Jump to ${p.file}:${p.position.line + 1}`,
+                description: `Confidence: ${(p.confidence * 100).toFixed(0)}%`,
                 detail: p.reason,
             });
         }
     } else if (target) {
         items.push({
-          label: `Edit Target: \${target.file}:\${target.position.line + 1}`,
+          label: `Edit Target: ${target.file}:${target.position.line + 1}`,
           description: 'Top predicted next edit',
           detail: 'Move cursor to the next logical task step',
         });
@@ -426,7 +426,7 @@ export class CommandHandlers implements vscode.Disposable {
       .update('enabled', !current, true);
 
     vscode.window.showInformationMessage(
-      `SONEC: \${!current ? 'Enabled' : 'Disabled'}`
+      `SONEC: ${!current ? 'Enabled' : 'Disabled'}`
     );
   }
 
@@ -460,7 +460,7 @@ export class CommandHandlers implements vscode.Disposable {
    */
   private async applySpeculativePlan(plan: any): Promise<void> {
     if (!plan) return;
-    this.logger.info(`Applying speculative plan: \${plan.id}`);
+    this.logger.info(`Applying speculative plan: ${plan.id}`);
     await this.actionEngine.executePlan(plan);
   }
 
