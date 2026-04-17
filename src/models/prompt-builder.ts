@@ -25,10 +25,10 @@ export class PromptBuilder {
   buildCompletionPrompt(context: ProjectContext): string {
     const sections: string[] = [];
 
-    // System context
+    // System context (Role and constraints)
     sections.push(this.buildSystemSection());
 
-    // Project style guide
+    // Project style and metadata
     sections.push(this.buildStyleSection(context.projectStyle));
 
     // Related file signatures (compressed)
@@ -36,31 +36,25 @@ export class PromptBuilder {
       sections.push(this.buildRelatedFilesSection(context));
     }
 
+    // Signatures and types (for symbol grounding)
+    if (context.resolvedSignatures && context.resolvedSignatures.length > 0) {
+        sections.push(`<signatures>\n${context.resolvedSignatures.join('\\n')}\n</signatures>`);
+    }
+
     // Symbols in scope
     if (context.symbols.length > 0) {
       sections.push(this.buildSymbolsSection(context));
     }
 
-    // Import context
-    if (context.imports.length > 0) {
-      sections.push(this.buildImportsSection(context));
-    }
-
-    // Recent edits (for continuity)
-    if (context.recentEdits.length > 0) {
-      sections.push(this.buildRecentEditsSection(context));
-    }
-
-    // Git diff context
+    // Git/Recent history (for trend awareness)
     if (context.gitDiffs.length > 0) {
       sections.push(this.buildGitDiffSection(context));
     }
 
-    // Current file with cursor position (most important — goes last)
-    sections.push(this.buildCurrentFileSection(context));
-
-    // Completion instruction
-    sections.push(this.buildCompletionInstruction(context));
+    // Finally the code context in FIM format
+    const cursor = context.currentFile;
+    const fim = `<|fim_prefix|>${cursor.precedingLines}${cursor.linePrefix}<|fim_suffix|>${cursor.lineSuffix}${cursor.followingLines}<|fim_middle|>`;
+    sections.push(fim);
 
     return sections.filter(Boolean).join('\n\n');
   }
@@ -109,12 +103,13 @@ export class PromptBuilder {
     return sections.filter(Boolean).join('\n\n');
   }
 
-  // ─────────────────────────────────────────────────────────
-  // Section Builders
-  // ─────────────────────────────────────────────────────────
-
   private buildSystemSection(): string {
-    return `You are SONEC, an autonomous code completion engine embedded in VS Code. Your output must be ONLY valid code that continues from the cursor position. Do not include explanations, markdown formatting, or code block markers. Output raw code only.`;
+    return `You are SONEC, the world's most advanced autonomous coding engine. You specialize in low-latency code completion, surgical refactoring, and predictive navigation.
+RULES:
+1. Output ONLY the code to be inserted at the cursor.
+2. NO markdown, NO explanations, NO code blocks.
+3. Match the project's naming conventions and formatting EXACTLY.
+4. Do NOT duplicate code already present in the suffix.`;
   }
 
   private buildStyleSection(style: ProjectStyle): string {

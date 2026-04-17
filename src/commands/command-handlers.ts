@@ -192,6 +192,14 @@ export class CommandHandlers implements vscode.Disposable {
     }
 
     await this.navigateToEdit(target.file, target.position);
+
+    // Refresh context and trigger inline suggestion at the new location
+    setTimeout(() => {
+        vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
+    }, 150);
+
+    // Proactively generate the AFTER-next predictions
+    this.generateNextEditPredictions();
     
     this.eventBus.emit({
       type: 'next_edit_jumped',
