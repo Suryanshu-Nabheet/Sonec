@@ -41,6 +41,11 @@ export class PromptBuilder {
         sections.push(`<signatures>\n${context.resolvedSignatures.join('\\n')}\n</signatures>`);
     }
 
+    // Diagnostics (Critical for auto-fixing errors)
+    if (context.diagnostics && context.diagnostics.length > 0) {
+        sections.push(this.buildDiagnosticsSection(context.diagnostics));
+    }
+
     // Symbols in scope
     if (context.symbols.length > 0) {
       sections.push(this.buildSymbolsSection(context));
@@ -282,19 +287,43 @@ Output format same as transformation plan.
     return sections.filter(Boolean).join('\n\n');
   }
 
+  private buildDiagnosticsSection(diagnostics: vscode.Diagnostic[]): string {
+    const errorList = diagnostics
+      .slice(0, 10)
+      .map((d) => `  - [L${d.range.start.line + 1}] ${d.message} (${this.severityName(d.severity)})`)
+      .join('\n');
+
+    return `<diagnostics>\n${errorList}\n</diagnostics>`;
+  }
+
+  private severityName(severity: vscode.DiagnosticSeverity): string {
+      switch (severity) {
+          case vscode.DiagnosticSeverity.Error: return 'Error';
+          case vscode.DiagnosticSeverity.Warning: return 'Warning';
+          case vscode.DiagnosticSeverity.Information: return 'Info';
+          default: return 'Hint';
+      }
+  }
+
   private buildNextEditInstruction(): string {
     return `<instruction>
-Based on the recent edit pattern in the code, predict the next location where the developer will need to make a change.
+Analyze the recent edit history, current file diagnostics (errors/warnings), and architectural patterns to predict the developer's absolute next logical move.
+
+Process:
+1. Identify the most critical error or the next logical step in the task.
+2. Resolve the exact file and line number for this destination.
+3. Propose a brief suggested change.
 
 Output format:
 {
+  "reasoning": "Explain your logic for this prediction in 1-2 sentences",
   "predictions": [
     {
-      "file": "relative/path",
+      "file": "relative/path/to/file",
       "line": N,
-      "reason": "Brief explanation",
-      "confidence": 0.85,
-      "suggestedChange": "optional code snippet"
+      "reason": "Why this location?",
+      "confidence": 0.95,
+      "suggestedChange": "Brief snippet of the intended change"
     }
   ]
 }

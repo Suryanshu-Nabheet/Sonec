@@ -277,7 +277,13 @@ export class CommandHandlers implements vscode.Disposable {
     if (filePath.startsWith('/') || filePath.includes(':')) {
         uri = vscode.Uri.file(filePath);
     } else if (wsFolder) {
-        uri = vscode.Uri.joinPath(wsFolder.uri, filePath);
+        // Try to find the file fuzzy-style within the workspace
+        const files = await vscode.workspace.findFiles(`**/${filePath.replace(/^\\.\//, '')}`, null, 1);
+        if (files.length > 0) {
+            uri = files[0];
+        } else {
+            uri = vscode.Uri.joinPath(wsFolder.uri, filePath);
+        }
     } else {
         uri = vscode.Uri.file(filePath);
     }
@@ -294,6 +300,11 @@ export class CommandHandlers implements vscode.Disposable {
         new vscode.Range(position, position),
         vscode.TextEditorRevealType.InCenter
       );
+
+      // Trigger inline suggestion immediately
+      setTimeout(() => {
+          vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
+      }, 100);
     } catch (err) {
       this.logger.error(`Failed to navigate to ${filePath}`, err);
     }

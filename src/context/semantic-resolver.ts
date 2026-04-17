@@ -29,6 +29,25 @@ export class SemanticResolver {
         const searchPos = this.findImportPosition(document, imp.moduleName);
         if (!searchPos) return null;
 
+        // Try to get hover data which often contains the flat signature and docs
+        const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+          'vscode.executeHoverProvider',
+          document.uri,
+          searchPos
+        );
+
+        if (hovers && hovers.length > 0) {
+            const signature = hovers[0].contents.map(c => {
+                if (typeof c === 'string') return c;
+                return c.value;
+            }).join('\n');
+            
+            if (signature) {
+                return `// Symbol info for ${imp.moduleName}:\n${signature}`;
+            }
+        }
+
+        // Fallback to definition provider if hover fails
         const definitions = await vscode.commands.executeCommand<vscode.Location[] | vscode.LocationLink[]>(
           'vscode.executeDefinitionProvider',
           document.uri,
@@ -46,9 +65,10 @@ export class SemanticResolver {
         
         if (signature) {
           const relPath = vscode.workspace.asRelativePath(uri);
-          return `// From ${relPath}:\n${signature}`;
+          return `// Definition from ${relPath}:\n${signature}`;
         }
-      } catch {
+      } catch (err) {
+        this.logger.debug(`Semantic resolution failed for ${imp.moduleName}: ${err}`);
         return null;
       }
       return null;

@@ -146,6 +146,7 @@ export interface FileContext {
   content: string;
   version: number;
   lineCount: number;
+  diagnostics?: any[]; // Simplified to avoid circularity or complex mapping
 }
 
 /**
@@ -215,6 +216,7 @@ export interface ProjectContext {
   trajectory?: string;
   impacts?: string[];
   resolvedSignatures?: string[];
+  diagnostics?: any[];
 }
 
 /**

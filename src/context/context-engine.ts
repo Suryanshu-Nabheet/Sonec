@@ -125,6 +125,9 @@ export class ContextEngine implements vscode.Disposable {
       // Use a standard style snapshot in the hot-path
       const projectStyle = this.styleAnalyzer.getDefaultStyle();
 
+      // Get standard diagnostics for the current file
+      const docDiagnostics = vscode.languages.getDiagnostics(document.uri);
+
       // Rank and compress context to fit model's token budget
       const rankedContext: ProjectContext = {
         currentFile: cursorContext,
@@ -138,6 +141,7 @@ export class ContextEngine implements vscode.Disposable {
         trajectory,
         impacts,
         resolvedSignatures,
+        diagnostics: docDiagnostics,
       };
 
       const compressed = this.contextRanker.rankAndCompress(
@@ -275,6 +279,7 @@ export class ContextEngine implements vscode.Disposable {
       content: document.getText(),
       version: document.version,
       lineCount: document.lineCount,
+      diagnostics: vscode.languages.getDiagnostics(document.uri),
     };
   }
 
