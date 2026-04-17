@@ -120,6 +120,11 @@ export function activate(context: vscode.ExtensionContext): void {
   const jumpIndicator = new JumpIndicatorManager();
   disposables.push(jumpIndicator);
 
+  const jumpStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  jumpStatusBar.command = 'sonec.jumpToNextEdit';
+  jumpStatusBar.tooltip = 'Jump to next predicted edit (TAB)';
+  disposables.push(jumpStatusBar);
+
   // ─── 9. Initialize Completion Provider ───
   const completionProvider = new SonecCompletionProvider(
     contextEngine,
@@ -157,15 +162,25 @@ export function activate(context: vscode.ExtensionContext): void {
   }));
 
   // ─── 9. Set up Domain Event Listeners ───
-  EventBus.getInstance().on('next_edits_updated', (event: any) => {
+  const updateJumpUI = () => {
       const topPrediction = predictionEngine.getJumpTarget();
       jumpIndicator.updateIndicator(topPrediction);
-      vscode.commands.executeCommand('setContext', 'sonec.hasNextEdit', !!topPrediction);
-  });
+      const hasTarget = !!topPrediction;
+      vscode.commands.executeCommand('setContext', 'sonec.hasNextEdit', hasTarget);
+      
+      if (hasTarget) {
+          jumpStatusBar.text = '$(zap) Jump Ready (TAB)';
+          jumpStatusBar.show();
+      } else {
+          jumpStatusBar.hide();
+      }
+  };
 
-  EventBus.getInstance().on('action_applied', (event: any) => {
+  eventBus.on('next_edits_updated', updateJumpUI);
+  eventBus.on('action_applied', () => {
       jumpIndicator.clearIndicators();
       vscode.commands.executeCommand('setContext', 'sonec.hasNextEdit', false);
+      jumpStatusBar.hide();
   });
 
   // ─── 10. Set up Document Event Listeners ───

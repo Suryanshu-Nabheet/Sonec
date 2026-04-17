@@ -31,6 +31,8 @@ interface ProviderAdapter {
   checkStatus(): Promise<{ ok: boolean; error?: string }>;
 }
 
+export type ModelRequestCategory = 'completion' | 'background';
+
 export class ModelLayer implements vscode.Disposable {
   private config: ConfigManager;
   private logger: Logger;
@@ -38,6 +40,7 @@ export class ModelLayer implements vscode.Disposable {
   private requestCount = 0;
   private lastRequestTime = 0;
   private readonly MIN_REQUEST_INTERVAL_MS = 100; // Rate limiting
+  private pendingRequests: Map<ModelRequestCategory, AbortController> = new Map();
 
   constructor() {
     this.config = ConfigManager.getInstance();
@@ -70,22 +73,33 @@ export class ModelLayer implements vscode.Disposable {
   /**
    * Send a completion request to the configured model
    */
-  async complete(request: ModelRequest): Promise<ModelResponse> {
+  async complete(request: ModelRequest, category: ModelRequestCategory = 'completion'): Promise<ModelResponse> {
+    this.cancelCategory(category);
+    const controller = new AbortController();
+    this.pendingRequests.set(category, controller);
+
     await this.rateLimit();
     const adapter = this.getAdapter();
-    const timer = this.logger.time('ModelLayer.complete');
+    const timer = this.logger.time(`ModelLayer.complete:${category}`);
 
     try {
-      this.logger.debug(`Sending model request (${request.prompt.length} chars)`);
+      this.logger.debug(`Sending ${category} request (${request.prompt.length} chars)`);
       const response = await adapter.complete(request);
       timer();
       this.requestCount++;
       this.logger.debug(`Model response received (${response.text.length} chars)`);
       return response;
-    } catch (err) {
-      timer();
-      this.logger.error('Model completion failed', err);
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+          this.logger.debug(`Request ${category} cancelled`);
+          throw err;
+      }
+      this.logger.error(`Model ${category} failed`, err);
       throw err;
+    } finally {
+        if (this.pendingRequests.get(category) === controller) {
+            this.pendingRequests.delete(category);
+        }
     }
   }
 
@@ -95,22 +109,51 @@ export class ModelLayer implements vscode.Disposable {
   async stream(
     request: ModelRequest,
     callback: StreamCallback,
-    token?: vscode.CancellationToken
+    token?: vscode.CancellationToken,
+    category: ModelRequestCategory = 'completion'
   ): Promise<ModelResponse> {
+    this.cancelCategory(category);
+    const controller = new AbortController();
+    this.pendingRequests.set(category, controller);
+
     await this.rateLimit();
     const adapter = this.getAdapter();
-    const timer = this.logger.time('ModelLayer.stream');
+    const timer = this.logger.time(`ModelLayer.stream:${category}`);
 
     try {
       const response = await adapter.stream(request, callback, token);
       timer();
       this.requestCount++;
       return response;
-    } catch (err) {
+    } catch (err: any) {
       timer();
-      this.logger.error('Model streaming failed', err);
+      if (err.name === 'AbortError') {
+          throw err;
+      }
+      this.logger.error(`Model streaming (${category}) failed`, err);
       throw err;
+    } finally {
+        if (this.pendingRequests.get(category) === controller) {
+            this.pendingRequests.delete(category);
+        }
     }
+  }
+
+  private cancelCategory(category: ModelRequestCategory): void {
+      const controller = this.pendingRequests.get(category);
+      if (controller) {
+          controller.abort();
+          this.pendingRequests.delete(category);
+      }
+      
+      // If we are starting an interactive request, cancel background ones to free up resources
+      if (category === 'completion') {
+          const bg = this.pendingRequests.get('background');
+          if (bg) {
+              bg.abort();
+              this.pendingRequests.delete('background');
+          }
+      }
   }
 
   private getAdapter(): ProviderAdapter {
@@ -138,7 +181,10 @@ export class ModelLayer implements vscode.Disposable {
   }
 
   dispose(): void {
-    // Cleanup any pending connections
+    for (const controller of this.pendingRequests.values()) {
+        controller.abort();
+    }
+    this.pendingRequests.clear();
   }
 }
 

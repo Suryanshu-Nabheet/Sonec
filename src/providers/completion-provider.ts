@@ -155,7 +155,11 @@ export class SonecCompletionProvider
       }
 
       return [item];
-    } catch (err) {
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+          this.logger.debug('Completion request cancelled by user or engine');
+          return null;
+      }
       this.logger.error('Completion provider failed', err);
       return null;
     }

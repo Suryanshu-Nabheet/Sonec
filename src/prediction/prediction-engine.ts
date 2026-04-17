@@ -143,42 +143,38 @@ export class PredictionEngine implements vscode.Disposable {
 
       timer();
       return result;
-    } catch (err) {
-      timer();
-      if (err instanceof Error && err.message.includes('cancelled')) {
-        return null;
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+          this.logger.debug('Completion request cancelled by user or engine');
+          return null;
       }
-      this.logger.error('Completion failed', err);
+      this.logger.error('Completion provider failed', err);
       return null;
     }
   }
 
   /**
-   * Generate a structured transformation plan (multi-file edits).
+   * Run a complex transformation on the current context.
    * @param context The project context
-   * @param userIntent Optional explicit user intent
+   * @param intent The user's refactoring intent
    * @param token Optional cancellation token
-   * @returns A promise that resolves to an action plan or null
+   * @returns A promise that resolves to a structured action plan
    */
-  async getTransformation(
+  public async getTransformation(
     context: ProjectContext,
-    userIntent?: string,
+    intent?: string,
     token?: vscode.CancellationToken
   ): Promise<ActionPlan | null> {
     const timer = this.logger.time('PredictionEngine.getTransformation');
-
     try {
-      const prompt = this.promptBuilder.buildTransformationPrompt(
-        context,
-        userIntent
-      );
+      const prompt = this.promptBuilder.buildTransformationPrompt(context, intent);
 
       const response = await this.modelLayer.complete({
         prompt,
         maxTokens: 2000,
-        temperature: 0.2,
+        temperature: 0.1,
         stream: false,
-      });
+      }, 'background');
 
       // Trigger speculative planning for multi-file edits in the background
       this.triggerSpeculativePlanning(context);
@@ -187,8 +183,9 @@ export class PredictionEngine implements vscode.Disposable {
       const plan = this.parseActionPlan(response.text);
       timer();
       return plan;
-    } catch (err) {
+    } catch (err: any) {
       timer();
+      if (err.name === 'AbortError') return null;
       this.logger.error('Transformation failed', err);
       return null;
     }
@@ -214,7 +211,7 @@ export class PredictionEngine implements vscode.Disposable {
         maxTokens: 1000,
         temperature: 0.3,
         stream: false,
-      });
+      }, 'background');
 
       const predictions = this.parseNextEditPredictions(response.text);
       this.nextEditPredictions = predictions;
@@ -226,8 +223,9 @@ export class PredictionEngine implements vscode.Disposable {
 
       timer();
       return predictions;
-    } catch (err) {
+    } catch (err: any) {
       timer();
+      if (err.name === 'AbortError') return [];
       this.logger.error('Next-edit prediction failed', err);
       return [];
     }
