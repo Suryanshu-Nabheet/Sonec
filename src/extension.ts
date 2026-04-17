@@ -224,11 +224,25 @@ function setupDocumentListeners(
     })
   );
 
-  // Track cursor movement for next-edit prediction
+  // Track cursor movement for proactive suggestions and trajectory updates
+  let selectionTimer: NodeJS.Timeout | null = null;
   disposables.push(
-    vscode.window.onDidChangeTextEditorSelection((_event) => {
-      // Could trigger speculative next-edit prediction here
-      // Debounced to avoid excessive calls
+    vscode.window.onDidChangeTextEditorSelection((event) => {
+      if (selectionTimer) {
+        clearTimeout(selectionTimer);
+      }
+
+      const config = ConfigManager.getInstance();
+      if (!config.getValue('enabled')) {return;}
+
+      // Trigger proactive completions after a short idle period
+      const debounceMs = config.getValue('debounceMs');
+      selectionTimer = setTimeout(() => {
+        const editor = vscode.window.activeTextEditor;
+        if (editor && editor.document === event.textEditor.document && editor.selection.isEmpty) {
+          vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
+        }
+      }, debounceMs);
     })
   );
 }

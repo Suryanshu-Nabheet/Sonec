@@ -224,6 +224,11 @@
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js",
+    "setup": "./scripts/setup.sh",
+    "launch": "./scripts/launch.sh",
+    "clean": "./scripts/clean.sh",
+    "test:scripts": "./scripts/test.sh",
+    "bundle": "./scripts/bundle.sh",
     "package": "vsce package"
   },
   "devDependencies": {

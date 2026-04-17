@@ -1,79 +1,66 @@
-# SONEC — Structured Omniscient Neural Editor & Compiler
+# SONEC: Structured Omniscient Neural Editor & Compiler
 
-> Autonomous code completion, transformation, and multi-file intelligence engine for Visual Studio Code.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/badge/Version-0.1.0-blue.svg)]()
 
-SONEC goes beyond traditional autocomplete. It behaves as an **intelligent coding engine** capable of predicting full code blocks, executing structured edits across multiple files, and creating a **flow state** coding experience — all without a chat interface.
+SONEC is an autonomous code engine for Visual Studio Code, designed to facilitate a high-velocity flow state. It integrates deep architectural analysis with state-of-the-art language models to provide context-aware completions, multi-file transformations, and intent-based navigation.
 
 ---
 
-## Features
+## Core Capabilities
 
-- **Inline Completions** — Context-aware code generation with partial acceptance (word-by-word, line-by-line)
-- **Structured Transformations** — Multi-file edit plans with atomic application and undo
-- **Next-Edit Prediction** — Jump to where you need to edit next across files
-- **Deep Context Engine** — Symbol graphs, import analysis, git diffs, style pattern learning
-- **Multi-Provider Support** — OpenAI, Anthropic, Ollama (local), or custom endpoints
-- **Performance Optimized** — Streaming, prefetching, caching, debouncing
+- **Autonomous Inline Completions**: Real-time code generation powered by a context-aware ranking engine.
+- **Architectural Transformations**: Multi-file refactoring and feature implementation via planned atomic actions.
+- **Speculative Prefetching**: Reduces perceived latency by pre-calculating completions using trajectory analysis.
+- **Deep Contextual Awareness**: Analyzes symbols, imports, git history, and project-specific coding patterns.
+- **Transaction-Safe Edits**: Complex changes are applied atomically with a reliable multi-file undo stack.
 
-## Quick Start
+## Getting Started
 
-1. Install dependencies: `npm install`
-2. Configure your API key in VS Code Settings → SONEC
-3. Press `F5` to launch the extension in debug mode
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) (Version 18.x or higher)
+- [VS Code](https://code.visualstudio.com/)
+
+### Installation & Setup
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/Suryanshu-Nabheet/Sonec.git
+   ```
+
+2. **Initialize development environment**:
+   ```bash
+   chmod +x ./scripts/setup.sh
+   ./scripts/setup.sh
+   ```
+
+3. **Open in VS Code**:
+   ```bash
+   code .
+   ```
+
+4. **Launch Extension**:
+   Press `F5` to open the Extension Development Host.
+
+## Documentation
+
+For deep dives into the engine's internals and contributing guidelines, see the standard documentation:
+
+- [Architecture Overview](./docs/ARCHITECTURE.md)
+- [Internal API Documentation](./docs/API.md)
+- [Contribution Guidelines](./docs/CONTRIBUTING.md)
 
 ## Configuration
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `sonec.enabled` | `true` | Enable/disable the engine |
-| `sonec.provider` | `openai` | AI provider (openai/anthropic/ollama/custom) |
-| `sonec.model` | `gpt-4o` | Model identifier |
-| `sonec.apiKey` | `""` | API key for the provider |
-| `sonec.debounceMs` | `150` | Debounce delay before triggering |
-| `sonec.streamingEnabled` | `true` | Enable streaming for lower latency |
-| `sonec.prefetchEnabled` | `true` | Enable speculative prefetching |
-| `sonec.multiFileEnabled` | `true` | Enable multi-file edit suggestions |
-
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| `Tab` | Accept full suggestion |
-| `Cmd/Ctrl + →` | Accept next word |
-| `Cmd/Ctrl + Shift + →` | Accept next line |
-| `Cmd/Ctrl + ]` | Jump to next predicted edit |
-| `Cmd/Ctrl + [` | Jump to previous predicted edit |
-| `Cmd/Ctrl + Shift + Enter` | Apply full transformation |
-| `Escape` | Dismiss suggestion |
-| `Ctrl + Space` | Force trigger completion |
-
-## Architecture
-
-```
-┌───────────────────────────── VS Code Extension ─────────────────────────────┐
-│                                                                              │
-│  Completion Provider ──► Prediction Engine ──► Model Layer                   │
-│         │                      │                    │                        │
-│         ▼                      ▼                    ▼                        │
-│  Command Handlers        Context Engine        Prompt Builder                │
-│         │                      │                                             │
-│         ▼                      ▼                                             │
-│  Action Execution     Symbol/Import/Git/Style                                │
-│  Engine (atomic        Analyzers + Context                                   │
-│   undo stack)          Ranker                                                │
-│                                                                              │
-│  ─────────────────── Performance + Cache + Events ──────────────────────     │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
-
-## Development
-
-```bash
-npm install
-npm run watch    # Continuous compilation
-# Press F5 in VS Code to launch Extension Host
-```
+| Key | Type | Description |
+|-----|------|-------------|
+| `sonec.enabled` | `boolean` | Activates the core engine services. |
+| `sonec.provider` | `enum` | LLM provider (ollama, anthropic, openai, custom). |
+| `sonec.model` | `string` | Specific model identifier (e.g., `qwen2.5-coder:1.5b`). |
+| `sonec.streamingEnabled` | `boolean` | Enables real-time token streaming for zero latency. |
+| `sonec.multiFileEnabled` | `boolean` | Allows the engine to plan edits across multiple files. |
 
 ## License
 
-MIT
+This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.

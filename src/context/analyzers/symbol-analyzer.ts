@@ -10,12 +10,20 @@ import * as vscode from 'vscode';
 import { SymbolInfo } from '../../core/types';
 import { Logger } from '../../core/logger';
 
+/**
+ * Manages the discovery and caching of code symbols to provide structural context.
+ */
 export class SymbolAnalyzer {
   private logger = Logger.getInstance();
   private symbolCache = new Map<string, { symbols: SymbolInfo[]; version: number }>();
 
   /**
-   * Get symbols from the current document and related workspace symbols
+   * Get symbols from the current document and related workspace symbols.
+   * This is used to build a comprehensive map of the code structure around the cursor.
+   * @param document The current text document
+   * @param token The cancellation token
+   * @param maxSymbols Maximum number of symbols to retrieve
+   * @returns A promise that resolves to an array of SymbolInfo objects
    */
   async getSymbols(
     document: vscode.TextDocument,
@@ -25,22 +33,28 @@ export class SymbolAnalyzer {
     const timer = this.logger.time('SymbolAnalyzer.getSymbols');
 
     try {
-      // Check cache
+      // Check for valid cache entry
       const cached = this.symbolCache.get(document.uri.toString());
       if (cached && cached.version === document.version) {
         timer();
         return cached.symbols;
       }
 
-      // Get document symbols (fast — local to file)
+      // Phase 1: Local Document Symbols (Fast)
       const docSymbols = await this.getDocumentSymbols(document, token);
       
-      // Get workspace symbols referenced from this file (slower — async)
+      if (token.isCancellationRequested) {
+        timer();
+        return docSymbols;
+      }
+
+      // Phase 2: Remote Workspace Symbols (Slower)
+      // Only triggered if we haven't reached the token limit yet
       const referencedSymbols = await this.getReferencedSymbols(document, token);
 
       const allSymbols = [...docSymbols, ...referencedSymbols].slice(0, maxSymbols);
 
-      // Cache
+      // Update cache
       this.symbolCache.set(document.uri.toString(), {
         symbols: allSymbols,
         version: document.version,
@@ -56,7 +70,7 @@ export class SymbolAnalyzer {
   }
 
   /**
-   * Get all symbols defined in the current document
+   * Get all symbols defined locally in the current document.
    */
   private async getDocumentSymbols(
     document: vscode.TextDocument,
@@ -70,13 +84,14 @@ export class SymbolAnalyzer {
       if (!symbols) {return [];}
 
       return this.flattenSymbols(symbols, document.uri.fsPath);
-    } catch {
-      return [];
+    } catch (err) {
+        this.logger.debug(`Document symbol provider failed for \${document.uri.fsPath}`);
+        return [];
     }
   }
 
   /**
-   * Find workspace symbols that are referenced in the current document
+   * Find workspace symbols that are semantically referenced in the current document.
    */
   private async getReferencedSymbols(
     document: vscode.TextDocument,
@@ -87,8 +102,7 @@ export class SymbolAnalyzer {
     const results: SymbolInfo[] = [];
     const seen = new Set<string>();
 
-    // Query workspace for each unique identifier
-    // Limit to avoid excessive queries
+    // Query workspace for unique identifiers (limited to top 20 for performance)
     const topIdentifiers = identifiers.slice(0, 20);
 
     for (const id of topIdentifiers) {
@@ -102,7 +116,9 @@ export class SymbolAnalyzer {
 
         if (wsSymbols) {
           for (const sym of wsSymbols.slice(0, 3)) {
+            // Avoid adding symbols from the current file (already handled)
             if (sym.location.uri.toString() === document.uri.toString()) {continue;}
+            
             results.push({
               name: sym.name,
               kind: sym.kind,
@@ -113,7 +129,7 @@ export class SymbolAnalyzer {
           }
         }
       } catch {
-        // Symbol provider might not be available for all languages
+        // Fallback for languages without workspace symbol support
       }
     }
 
@@ -121,7 +137,7 @@ export class SymbolAnalyzer {
   }
 
   /**
-   * Flatten nested DocumentSymbol tree into flat SymbolInfo array
+   * Flattens a nested DocumentSymbol tree into a linear SymbolInfo array.
    */
   private flattenSymbols(
     symbols: vscode.DocumentSymbol[],
@@ -151,11 +167,10 @@ export class SymbolAnalyzer {
   }
 
   /**
-   * Extract potential identifiers from source code text.
-   * Used to find workspace symbols referenced in the file.
+   * Extract potential class and type identifiers from source code.
    */
   private extractIdentifiers(text: string): string[] {
-    // Match PascalCase and camelCase identifiers (likely imports/references)
+    // Focus on PascalCase identifiers which typically represent classes, types, or modules
     const regex = /\b([A-Z][a-zA-Z0-9]{2,})\b/g;
     const identifiers = new Set<string>();
     let match;
@@ -167,12 +182,16 @@ export class SymbolAnalyzer {
     return Array.from(identifiers);
   }
 
-  /** Invalidate cache for a specific file */
+  /** 
+   * Invalidate the symbol cache for a specific file.
+   */
   invalidate(uri: vscode.Uri): void {
     this.symbolCache.delete(uri.toString());
   }
 
-  /** Clear entire symbol cache */
+  /** 
+   * Clear the entire cache.
+   */
   clearCache(): void {
     this.symbolCache.clear();
   }
