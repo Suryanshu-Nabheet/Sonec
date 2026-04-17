@@ -258,12 +258,23 @@ function setupDocumentListeners(
       const config = ConfigManager.getInstance();
       if (!config.getValue('enabled')) {return;}
 
-      // Trigger proactive completions after a short idle period
+      // Trigger proactive completions and trajectory updates after a short idle period
       const debounceMs = config.getValue('debounceMs');
-      selectionTimer = setTimeout(() => {
+      selectionTimer = setTimeout(async () => {
         const editor = vscode.window.activeTextEditor;
         if (editor && editor.document === event.textEditor.document && editor.selection.isEmpty) {
           vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
+          
+          // Background predictive pathing
+          try {
+              const cts = new vscode.CancellationTokenSource();
+              setTimeout(() => cts.cancel(), 5000);
+              const context = await contextEngine.buildContext(editor.document, editor.selection.active, cts.token);
+              await _predictionEngine.predictNextEdits(context, cts.token);
+              cts.dispose();
+          } catch {
+              // Non-blocking
+          }
         }
       }, debounceMs);
     })

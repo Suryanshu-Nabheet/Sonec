@@ -75,37 +75,52 @@ export class PredictionEngine implements vscode.Disposable {
       if (token.isCancellationRequested) {return null;}
 
       // Build prompt
-      const prompt = this.promptBuilder.buildCompletionPrompt(context);
-
-      // Call model
+      let prompt: string;
       const startTime = Date.now();
       let completionText = '';
+      const isFileEmpty = context.currentFile.precedingLines.trim().length === 0 && 
+                          context.currentFile.followingLines.trim().length === 0 &&
+                          context.currentFile.linePrefix.trim().length === 0;
 
-      if (this.config.getValue('streamingEnabled')) {
-        // Stream for lower perceived latency
-        await this.modelLayer.stream(
-          {
-            prompt,
-            systemPrompt: undefined,
-            maxTokens: this.calculateMaxTokens(context),
-            temperature: 0.1,
-            stopSequences: this.getStopSequences(context),
-            stream: true,
-          },
-          (chunk) => {
-            completionText += chunk.text;
-          },
-          token
-        );
+      if (isFileEmpty) {
+          this.logger.info('Empty file detected, using scaffold prompter');
+          prompt = this.promptBuilder.buildScaffoldPrompt(context);
+          // Extensive code at start
+          completionText = (await this.modelLayer.complete({
+              prompt,
+              maxTokens: 2000,
+              temperature: 0.3,
+              stream: false
+          })).text;
       } else {
-        const response = await this.modelLayer.complete({
-          prompt,
-          maxTokens: this.calculateMaxTokens(context),
-          temperature: 0.1,
-          stopSequences: this.getStopSequences(context),
-          stream: false,
-        });
-        completionText = response.text;
+          prompt = this.promptBuilder.buildCompletionPrompt(context);
+          
+          if (this.config.getValue('streamingEnabled')) {
+            // Stream for lower perceived latency
+            await this.modelLayer.stream(
+              {
+                prompt,
+                systemPrompt: undefined,
+                maxTokens: this.calculateMaxTokens(context),
+                temperature: 0.1,
+                stopSequences: this.getStopSequences(context),
+                stream: true,
+              },
+              (chunk) => {
+                completionText += chunk.text;
+              },
+              token
+            );
+          } else {
+            const response = await this.modelLayer.complete({
+              prompt,
+              maxTokens: this.calculateMaxTokens(context),
+              temperature: 0.1,
+              stopSequences: this.getStopSequences(context),
+              stream: false,
+            });
+            completionText = response.text;
+          }
       }
 
       if (token.isCancellationRequested || !completionText.trim()) {
@@ -244,6 +259,17 @@ export class PredictionEngine implements vscode.Disposable {
     // Return the highest confidence prediction
     const best = [...this.nextEditPredictions].sort((a, b) => b.confidence - a.confidence)[0];
     return { file: best.file, position: best.position };
+  }
+
+  /**
+   * Manually set next-edit predictions (used by AutonomousRefactorEngine).
+   */
+  public setPredictions(predictions: NextEditPrediction[]): void {
+      this.nextEditPredictions = predictions;
+      this.eventBus.emit({
+          type: 'next_edits_updated',
+          data: { predictions }
+      } as any);
   }
 
   /**

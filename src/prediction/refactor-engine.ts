@@ -72,6 +72,24 @@ export class AutonomousRefactorEngine implements vscode.Disposable {
         const primaryEditor = visibleEditors[0];
         const context = await this.contextEngine.buildContext(primaryEditor.document, primaryEditor.selection.active, cts.token);
         
+        // Push jump predictions for all files with issues
+        const jumpPredictions = targetDocs.map(doc => {
+            const diags = vscode.languages.getDiagnostics(doc.uri);
+            if (diags.length === 0) return null;
+            const wsFolder = vscode.workspace.workspaceFolders?.[0];
+            const relativePath = wsFolder ? vscode.workspace.asRelativePath(doc.uri) : doc.uri.fsPath;
+            return {
+                file: relativePath,
+                position: diags[0].range.start,
+                reason: `Fix diagnostic issue: \${diags[0].message}`,
+                confidence: 0.9
+            };
+        }).filter(Boolean) as any[];
+
+        if (jumpPredictions.length > 0) {
+            this.predictionEngine.setPredictions(jumpPredictions);
+        }
+
         const plan = await this.predictionEngine.getTransformation(
             context,
             `Fix the following issues across the open files and ensure architectural consistency: \${allIssues.length > 0 ? allIssues.join(', ') : 'Perform general code quality improvements and refactoring.'}`,

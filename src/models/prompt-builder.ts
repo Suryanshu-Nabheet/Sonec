@@ -308,6 +308,21 @@ Output ONLY valid JSON.
 </instruction>`;
   }
 
+  public buildScaffoldPrompt(context: ProjectContext): string {
+    const sections: string[] = [];
+    sections.push(this.buildSystemSection());
+    sections.push(`You are a software architect. Suggest the full boilerplate or next logical component for this project.`);
+    sections.push(this.buildRelatedFilesSection(context));
+    sections.push(this.buildCurrentFileSection(context));
+    
+    sections.push(`<instruction>
+The file is empty or at its beginning. Suggest an extensive and complete code structure based on the project context.
+Output ONLY raw code. Do not include explanations.
+</instruction>`);
+
+    return sections.filter(Boolean).join('\n\n');
+  }
+
   private symbolKindName(kind: number): string {
     const names: Record<number, string> = {
       0: 'file',
