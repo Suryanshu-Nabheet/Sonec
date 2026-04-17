@@ -75,24 +75,9 @@ export class PredictionEngine implements vscode.Disposable {
       if (token.isCancellationRequested) {return null;}
 
       // Build prompt
-      let prompt: string;
-      const isFileEmpty = context.currentFile.precedingLines.trim().length === 0 && 
-                          context.currentFile.followingLines.trim().length === 0 &&
-                          context.currentFile.linePrefix.trim().length === 0 &&
-                          context.currentFile.lineSuffix.trim().length === 0;
-
-      if (isFileEmpty) {
-          this.logger.info('Empty file detected, using scaffold prompter');
-          prompt = this.promptBuilder.buildScaffoldPrompt(context);
-      } else {
-          prompt = this.promptBuilder.buildCompletionPrompt(context);
-      }
-
-      // Call model
+      const prompt = this.promptBuilder.buildCompletionPrompt(context);
       const startTime = Date.now();
       let completionText = '';
-      const maxTokens = isFileEmpty ? 2000 : this.calculateMaxTokens(context);
-      const temperature = isFileEmpty ? 0.3 : 0.1;
 
       if (this.config.getValue('streamingEnabled')) {
         // Stream for lower perceived latency
@@ -100,8 +85,8 @@ export class PredictionEngine implements vscode.Disposable {
           {
             prompt,
             systemPrompt: undefined,
-            maxTokens,
-            temperature,
+            maxTokens: this.calculateMaxTokens(context),
+            temperature: 0.1,
             stopSequences: this.getStopSequences(context),
             stream: true,
           },
@@ -113,8 +98,8 @@ export class PredictionEngine implements vscode.Disposable {
       } else {
         const response = await this.modelLayer.complete({
           prompt,
-          maxTokens,
-          temperature,
+          maxTokens: this.calculateMaxTokens(context),
+          temperature: 0.1,
           stopSequences: this.getStopSequences(context),
           stream: false,
         });

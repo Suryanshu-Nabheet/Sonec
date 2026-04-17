@@ -625,11 +625,6 @@ class OllamaAdapter implements ProviderAdapter {
   }
 
   private buildOllamaPrompt(request: ModelRequest): string {
-    // If it's a FIM prompt, send it raw
-    if (request.prompt.includes('<|fim_prefix|>')) {
-      return request.prompt;
-    }
-
     let prompt = '';
     if (request.systemPrompt) {
       prompt += `### System\n${request.systemPrompt}\n\n`;
