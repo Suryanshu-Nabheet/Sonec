@@ -84,6 +84,34 @@ export class SonecCompletionProvider
       return null;
     }
 
+    // Continuous Typing Fast-Forward (Zero-Latency Predictive Ghost Text)
+    if (this.lastPosition && this.currentCompletion) {
+        if (position.line === this.lastPosition.line && position.character > this.lastPosition.character) {
+            const lineText = document.lineAt(position.line).text;
+            const typedText = lineText.substring(this.lastPosition.character, position.character);
+            const remaining = this.currentCompletion.insertText.substring(this.acceptedOffset);
+            
+            if (remaining.startsWith(typedText)) {
+                this.acceptedOffset += typedText.length;
+                this.lastPosition = position;
+                
+                // Return immediately - perfectly seamless 0ms latency typing!
+                return [new vscode.InlineCompletionItem(
+                    remaining.substring(typedText.length),
+                    new vscode.Range(position, position)
+                )];
+            } else {
+                // User diverged from prediction
+                this.currentCompletion = null;
+                this.acceptedOffset = 0;
+            }
+        } else if (position.line !== this.lastPosition.line || position.character < this.lastPosition.character) {
+            // Cursor moved somewhere else
+            this.currentCompletion = null;
+            this.acceptedOffset = 0;
+        }
+    }
+
     // Track position for movement detection
     this.lastPosition = position;
 

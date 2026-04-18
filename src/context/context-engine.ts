@@ -93,34 +93,36 @@ export class ContextEngine implements vscode.Disposable {
     try {
       // Get basic context points
       const cursorContext = this.buildCursorContext(document, position);
-      const openFiles = await this.getOpenFileContexts(document.uri);
-      const symbols = await this.symbolAnalyzer.getSymbols(document, token, MAX_SYMBOLS);
-      const imports = await this.importAnalyzer.analyzeImports(document);
-      const gitDiffs = await this.gitAnalyzer.getRecentDiffs();
+      
       const trajectory = this.trajectoryEngine.getTrajectoryContext();
-      const impacts = await this.getSymbolImpacts(document, position, token);
       
-      // Short-circuit semantic resolver if not needed for performance
-      let resolvedSignatures: string[] = [];
-      const lineText = document.lineAt(position.line).text.trim();
-      const isComplex = lineText.includes('.') || lineText.startsWith('import') || lineText.includes('(');
-      
-      if (isComplex) {
-        resolvedSignatures = await this.semanticResolver.resolveImportSignatures(document, imports, token);
-      } else {
-        this.logger.debug('Skipping semantic resolution for simple line');
-      }
+      // Parallelize heavy I/O operations
+      const [openFiles, symbols, imports, gitDiffs, impacts] = await Promise.all([
+        this.getOpenFileContexts(document.uri),
+        this.symbolAnalyzer.getSymbols(document, token, MAX_SYMBOLS),
+        this.importAnalyzer.analyzeImports(document),
+        this.gitAnalyzer.getRecentDiffs(),
+        this.getSymbolImpacts(document, position, token)
+      ]);
 
       if (token.isCancellationRequested) {
         throw new Error('Context building cancelled');
       }
 
-      // Find related files based on imports and symbol usage
-      const relatedFiles = await this.findRelatedFiles(
-        document,
-        imports,
-        symbols
-      );
+      // Parallelize secondary context passes
+      let resolvedSignatures: string[] = [];
+      const lineText = document.lineAt(position.line).text.trim();
+      const isComplex = lineText.includes('.') || lineText.startsWith('import') || lineText.includes('(');
+      
+      const [relatedFiles, sigs] = await Promise.all([
+        this.findRelatedFiles(document, imports, symbols),
+        isComplex ? this.semanticResolver.resolveImportSignatures(document, imports, token) : Promise.resolve([])
+      ]);
+      resolvedSignatures = sigs;
+      
+      if (!isComplex) {
+        this.logger.debug('Skipping semantic resolution for simple line');
+      }
 
       // Use a standard style snapshot in the hot-path
       const projectStyle = this.styleAnalyzer.getDefaultStyle();

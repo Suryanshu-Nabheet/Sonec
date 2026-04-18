@@ -597,29 +597,39 @@ export class PredictionEngine implements vscode.Disposable {
    * @param _context The project context
    * @returns The maximum token count
    */
-  private calculateMaxTokens(_context: ProjectContext): number {
+  private calculateMaxTokens(context: ProjectContext): number {
     const maxLines = this.config.getValue('maxCompletionLines');
-    // Estimate ~20 tokens per line of code
-    return Math.min(2000, maxLines * 20);
+    // Drastically cap max tokens to ensure sub-100ms finish times for inline context
+    // The shorter the generation limit, the earlier the LLM API finalizes the stream
+    return Math.min(256, maxLines * 20);
   }
 
   /**
    * Get stop sequences based on the current language.
+   * Leverages advanced block-outdent detection to halt the LLM instantly.
    * @param context The project context
    * @returns An array of stop sequences
    */
   private getStopSequences(context: ProjectContext): string[] {
     const lang = context.currentFile.file.languageId;
-    const common = ['\n\n\n']; // Triple newline = likely end of block
+    const indent = context.currentFile.indentation;
+    const common = ['\n\n\n']; 
+
+    // Advanced: Prevent deep architectural hallucinations by stopping on outdented structures
+    if (indent.length > 0) {
+      const outdent = indent.slice(0, Math.max(0, indent.length - 2));
+      common.push(`\n${outdent}class `);
+      common.push(`\n${outdent}function `);
+    }
 
     switch (lang) {
       case 'python':
-        return [...common, '\nclass ', '\ndef ', '\nasync def '];
+        return [...common, '\nclass ', '\ndef ', '\nasync def ', '\n@'];
       case 'typescript':
       case 'javascript':
       case 'typescriptreact':
       case 'javascriptreact':
-        return [...common];
+        return [...common, '\nexport ', '\ninterface ', '\ntype ', '\nimport '];
       default:
         return common;
     }
