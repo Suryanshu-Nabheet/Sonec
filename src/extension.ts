@@ -122,7 +122,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const jumpStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   jumpStatusBar.command = 'sonec.jumpToNextEdit';
-  jumpStatusBar.tooltip = 'Jump to next predicted edit (TAB)';
+  jumpStatusBar.tooltip = 'Navigate to next suggested edit';
   disposables.push(jumpStatusBar);
 
   // ─── 9. Initialize Completion Provider ───
@@ -169,7 +169,8 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.commands.executeCommand('setContext', 'sonec.hasNextEdit', hasTarget);
       
       if (hasTarget) {
-          jumpStatusBar.text = '$(zap) Jump Ready (TAB)';
+          jumpStatusBar.text = '$(arrow-right)';
+          jumpStatusBar.tooltip = 'Next edit location available';
           jumpStatusBar.show();
       } else {
           jumpStatusBar.hide();

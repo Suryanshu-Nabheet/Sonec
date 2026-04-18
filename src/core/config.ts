@@ -73,16 +73,23 @@ export class ConfigManager implements vscode.Disposable {
     return this.config[key];
   }
 
-  /** Check if the engine is enabled and properly configured */
+  /** Check if the engine is enabled and properly configured with enhanced validation */
   isReady(): boolean {
     if (!this.config.enabled) {return false;}
-    if (this.config.provider === 'ollama') {
-      return true; // Ollama uses local endpoint, no key needed
+    
+    // Provider-specific validation
+    switch (this.config.provider) {
+      case 'ollama':
+        return true; // Ollama uses local endpoint, no key needed
+      case 'openai':
+        return !!this.config.apiKey && this.config.apiKey.trim().length > 0;
+      case 'anthropic':
+        return !!this.config.apiKey && this.config.apiKey.trim().length > 0;
+      case 'custom':
+        return !!this.config.apiEndpoint && this.config.apiEndpoint.trim().length > 0;
+      default:
+        return false;
     }
-    if (this.config.provider === 'custom') {
-      return !!this.config.apiEndpoint;
-    }
-    return !!this.config.apiKey;
   }
 
   /** Get the effective API endpoint for the current provider */

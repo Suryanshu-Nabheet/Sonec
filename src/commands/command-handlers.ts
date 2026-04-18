@@ -249,13 +249,7 @@ export class CommandHandlers implements vscode.Disposable {
           'sonec.hasNextEdit',
           true
         );
-        vscode.window.showInformationMessage(
-          `SONEC: Found ${predictions.length} predicted edit locations`
-        );
-      } else {
-        vscode.window.showInformationMessage(
-          'SONEC: No edit predictions available'
-        );
+
       }
     } finally {
       cts.dispose();

@@ -3,17 +3,36 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/Version-0.1.0-blue.svg)]()
 
-SONEC is an autonomous code engine for Visual Studio Code, designed to facilitate a high-velocity flow state. It integrates deep architectural analysis with state-of-the-art language models to provide context-aware completions, multi-file transformations, and intent-based navigation.
+# SONEC — Autonomous Code Engine
+
+**Structured Omniscient Neural Editor & Compiler** - Production-grade VS Code extension for autonomous code completion, transformation, and multi-file intelligence.
 
 ---
 
-## Core Capabilities
+## ✨ Premium Features
+
+- **🧠 Intelligent Code Completion**: Advanced context-aware completions with fallback mechanisms
+- **⚡ Supermaven-Grade Suggestions**: Premium code predictions even in minimal contexts
+- **🔄 Autonomous Refactoring**: Automatic code improvements and optimizations
+- **🎯 Predictive Navigation**: Smart jump-to-next-edit functionality
+- **🌐 Multi-Provider Support**: OpenAI, Anthropic, Ollama, and custom endpoints
+- **📡 Real-time Streaming**: Instant responses with cancellation support
+- **📚 Project Learning**: Adapts to your coding style and patterns
+- **🚀 Production-Grade UI**: Clean, professional interface without intrusive messages
+
+## 🔧 Core Capabilities
 
 - **Autonomous Inline Completions**: Real-time code generation powered by a context-aware ranking engine.
 - **Architectural Transformations**: Multi-file refactoring and feature implementation via planned atomic actions.
 - **Speculative Prefetching**: Reduces perceived latency by pre-calculating completions using trajectory analysis.
 - **Deep Contextual Awareness**: Analyzes symbols, imports, git history, and project-specific coding patterns.
 - **Transaction-Safe Edits**: Complex changes are applied atomically with a reliable multi-file undo stack.
+
+- **Predictive Navigation**: Smart jump-to-next-edit functionality
+- **Multi-Provider Support**: OpenAI, Anthropic, Ollama, and custom endpoints
+- **Real-time Streaming**: Instant responses with cancellation support
+- **Project Learning**: Adapts to your coding style and patterns
+- **Production-Grade UI**: Clean, professional interface without intrusive messages
 
 ## Getting Started
 

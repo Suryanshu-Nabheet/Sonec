@@ -270,7 +270,7 @@ export class PredictionEngine implements vscode.Disposable {
   }
 
   /**
-   * Post-process raw model output into clean completion text.
+   * Enhanced post-processing with better context awareness
    * @param text The raw text from the model
    * @param context The project context
    * @returns The processed completion text
@@ -284,9 +284,9 @@ export class PredictionEngine implements vscode.Disposable {
 
     // Remove common model artifacts
     processed = processed.replace(/^<\/?code>/gm, '');
+    processed = processed.replace(/^[#\s]*TODO:.*$/gm, '');
 
-    // Aggressive duplicate stripping
-    // If the model suggests code that includes the text already in the prefix, strip it
+    // Enhanced duplicate stripping with better context awareness
     const prefix = context.currentFile.linePrefix.trim();
     if (prefix && processed.trim().startsWith(prefix)) {
         // Find the actual prefix in the text to handle whitespace correctly
@@ -296,8 +296,8 @@ export class PredictionEngine implements vscode.Disposable {
         }
     }
 
-    // Trim excessive trailing whitespace but preserve intentional newlines
-    processed = processed.replace(/\n{3,}/g, '\n\n');
+    // Smart truncation based on logical code boundaries
+    processed = this.smartTruncate(processed, context);
 
     // Don't duplicate text that already exists after the cursor
     const suffix = context.currentFile.lineSuffix.trim();
@@ -305,29 +305,108 @@ export class PredictionEngine implements vscode.Disposable {
       processed = processed.slice(0, -suffix.length);
     }
 
-    // Ensure indentation matches context
-    const contextIndent = context.currentFile.indentation;
-    if (contextIndent && processed.startsWith('\n')) {
-      const lines = processed.split('\n');
-      processed = lines
-        .map((line, i) => {
-          if (i === 0) {return line;} // First line continues from cursor
-          if (!line.trim()) {return line;}
-          return line; // Respect model's indentation (it has style context)
-        })
-        .join('\n');
-    }
+    // Enhanced indentation handling
+    processed = this.fixIndentation(processed, context);
 
-    // Enforce max completion lines
-    const maxLines = this.config.getValue('maxCompletionLines');
-    const lines = processed.split('\n');
-    if (lines.length > maxLines) {
-      // Try to find a natural break point
-      const breakIdx = this.findNaturalBreak(lines, maxLines);
-      processed = lines.slice(0, breakIdx).join('\n');
-    }
+    // Remove incomplete or malformed code
+    processed = this.cleanupIncompleteCode(processed, context);
 
     return processed;
+  }
+
+  /**
+   * Smart truncation at logical code boundaries
+   */
+  private smartTruncate(text: string, context: ProjectContext): string {
+    const maxLines = this.config.getValue('maxCompletionLines');
+    const lines = text.split('\n');
+    
+    if (lines.length <= maxLines) {
+      return text;
+    }
+
+    // Look for natural break points
+    const breakPoints = [
+      /^\s*}\s*$/,           // End of class/function
+      /^\s*\);\s*$/,         // End of function call
+      /^\s*;\s*$/,           // End of statement
+      /^\s*$/                 // Empty line
+    ];
+
+    for (let i = maxLines - 1; i >= Math.max(0, maxLines - 10); i--) {
+      const line = lines[i];
+      if (breakPoints.some(pattern => pattern.test(line))) {
+        return lines.slice(0, i + 1).join('\n');
+      }
+    }
+
+    // Fallback to simple truncation
+    return lines.slice(0, maxLines).join('\n');
+  }
+
+  /**
+   * Enhanced indentation fixing
+   */
+  private fixIndentation(text: string, context: ProjectContext): string {
+    const contextIndent = context.currentFile.indentation;
+    const lines = text.split('\n');
+    
+    return lines
+      .map((line, i) => {
+        if (i === 0) return line; // First line continues from cursor
+        if (!line.trim()) return line; // Keep empty lines
+        
+        // Preserve relative indentation while matching base style
+        const leadingWhitespace = line.match(/^[ \t]*/)?.[0] || '';
+        const strippedLine = line.substring(leadingWhitespace.length);
+        
+        // Use project's indentation style
+        if (context.projectStyle.indentation === 'spaces') {
+          const indentLevel = Math.floor(leadingWhitespace.length / context.projectStyle.indentSize);
+          return ' '.repeat(indentLevel * context.projectStyle.indentSize) + strippedLine;
+        }
+        
+        return line; // Keep original for tabs
+      })
+      .join('\n');
+  }
+
+  /**
+   * Clean up incomplete or malformed code
+   */
+  private cleanupIncompleteCode(text: string, context: ProjectContext): string {
+    const lines = text.split('\n');
+    const cleanedLines: string[] = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      
+      // Skip obviously incomplete lines
+      if (trimmed.endsWith(',') || trimmed.endsWith('...') || trimmed === '...') {
+        continue;
+      }
+      
+      // Fix common syntax issues
+      let fixedLine = line;
+      
+      // Fix double semicolons
+      fixedLine = fixedLine.replace(/;{2,}/g, ';');
+      
+      // Fix missing semicolons in certain contexts
+      if (context.projectStyle.semicolons && 
+          trimmed && 
+          !trimmed.endsWith(';') && 
+          !trimmed.endsWith('{') && 
+          !trimmed.endsWith('}') &&
+          !trimmed.match(/\b(if|for|while|function|class|def)\b/)) {
+        fixedLine += ';';
+      }
+      
+      cleanedLines.push(fixedLine);
+    }
+    
+    return cleanedLines.join('\n');
   }
 
   /**
@@ -547,7 +626,7 @@ export class PredictionEngine implements vscode.Disposable {
   }
 
   /**
-   * Estimate the confidence of a generated completion.
+   * Enhanced confidence estimation with multiple factors
    * @param completion The generated completion text
    * @param context The project context
    * @returns A confidence value between 0 and 1
@@ -556,21 +635,167 @@ export class PredictionEngine implements vscode.Disposable {
     completion: string,
     context: ProjectContext
   ): number {
-    let confidence = 0.7; // Base confidence
+    let confidence = 0.5; // Base confidence
 
-    // Short completions are generally more reliable
-    if (completion.length < 100) {confidence += 0.1;}
-    if (completion.length < 30) {confidence += 0.1;}
+    // Length-based scoring
+    if (completion.length < 50) confidence += 0.15;
+    if (completion.length < 20) confidence += 0.1;
+    if (completion.length > 200) confidence -= 0.1;
 
-    // Completions with informed imports context are more reliable
-    if (context.imports.length > 0) {confidence += 0.05;}
+    // Context quality scoring
+    if (context.symbols.length > 5) confidence += 0.05;
+    if (context.imports.length > 0) confidence += 0.05;
+    if (context.resolvedSignatures && context.resolvedSignatures.length > 0) confidence += 0.05;
 
-    // Multi-line completions are less certain
-    const lineCount = completion.split('\n').length;
-    if (lineCount > 10) {confidence -= 0.1;}
-    if (lineCount > 20) {confidence -= 0.1;}
+    // Code structure scoring
+    const lines = completion.split('\n');
+    const hasValidStructure = this.validateCodeStructure(completion, context.currentFile.file.languageId);
+    if (hasValidStructure) confidence += 0.1;
+
+    // Language-specific patterns
+    if (this.hasLanguageSpecificPatterns(completion, context.currentFile.file.languageId)) {
+      confidence += 0.05;
+    }
+
+    // Consistency with project style
+    if (this.isConsistentWithProjectStyle(completion, context.projectStyle)) {
+      confidence += 0.05;
+    }
+
+    // Penalty for incomplete code
+    if (this.isLikelyIncomplete(completion)) {
+      confidence -= 0.1;
+    }
+
+    // Bonus for contextually relevant completions
+    if (this.isContextuallyRelevant(completion, context)) {
+      confidence += 0.1;
+    }
 
     return Math.min(1, Math.max(0, confidence));
+  }
+
+  /**
+   * Validate basic code structure
+   */
+  private validateCodeStructure(code: string, languageId: string): boolean {
+    const trimmed = code.trim();
+    if (!trimmed) return false;
+
+    // Check for balanced brackets
+    const brackets: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
+    const stack: string[] = [];
+    
+    for (const char of trimmed) {
+      if (brackets[char]) {
+        stack.push(brackets[char]);
+      } else if (Object.values(brackets).includes(char)) {
+        if (stack.pop() !== char) return false;
+      }
+    }
+    
+    if (stack.length > 0) return false;
+
+    // Language-specific validation
+    switch (languageId) {
+      case 'typescript':
+      case 'javascript':
+        return !trimmed.match(/^[^\w]*function[^\w]*$/) && // Not just "function"
+               !trimmed.match(/^[^\w]*class[^\w]*$/); // Not just "class"
+      case 'python':
+        return !trimmed.match(/^[^\w]*def[^\w]*$/) && // Not just "def"
+               !trimmed.match(/^[^\w]*class[^\w]*$/); // Not just "class"
+      default:
+        return true;
+    }
+  }
+
+  /**
+   * Check for language-specific patterns
+   */
+  private hasLanguageSpecificPatterns(code: string, languageId: string): boolean {
+    switch (languageId) {
+      case 'typescript':
+      case 'javascript':
+        return code.includes('function') || 
+               code.includes('const ') || 
+               code.includes('let ') || 
+               code.includes('class ') ||
+               code.includes('=>') ||
+               code.includes('import ');
+      case 'python':
+        return code.includes('def ') || 
+               code.includes('class ') ||
+               code.includes('import ') ||
+               code.includes('from ') ||
+               code.includes('self.');
+      case 'java':
+        return code.includes('public ') || 
+               code.includes('private ') ||
+               code.includes('class ') ||
+               code.includes('interface ');
+      default:
+        return true;
+    }
+  }
+
+  /**
+   * Check consistency with project style
+   */
+  private isConsistentWithProjectStyle(code: string, style: any): boolean {
+    // Check indentation consistency
+    const hasSpaces = code.includes('  ');
+    const hasTabs = code.includes('\t');
+    
+    if (style.indentation === 'spaces' && hasTabs) return false;
+    if (style.indentation === 'tabs' && hasSpaces) return false;
+
+    // Check quote style
+    const singleQuotes = (code.match(/'/g) || []).length;
+    const doubleQuotes = (code.match(/"/g) || []).length;
+    
+    if (style.quoteStyle === 'single' && doubleQuotes > singleQuotes) return false;
+    if (style.quoteStyle === 'double' && singleQuotes > doubleQuotes) return false;
+
+    return true;
+  }
+
+  /**
+   * Check if code is likely incomplete
+   */
+  private isLikelyIncomplete(code: string): boolean {
+    const trimmed = code.trim();
+    
+    // Ends with incomplete patterns
+    if (trimmed.endsWith(',') || 
+        trimmed.endsWith('...') || 
+        trimmed.endsWith(' +') ||
+        trimmed.endsWith(' ||') ||
+        trimmed.endsWith(' &&')) {
+      return true;
+    }
+
+    // Unbalanced brackets (quick check)
+    const openBrackets = (trimmed.match(/[\[{]/g) || []).length;
+    const closeBrackets = (trimmed.match(/[\]}]/g) || []).length;
+    
+    return openBrackets !== closeBrackets;
+  }
+
+  /**
+   * Check if completion is contextually relevant
+   */
+  private isContextuallyRelevant(completion: string, context: ProjectContext): boolean {
+    const completionLower = completion.toLowerCase();
+    const prefixLower = context.currentFile.linePrefix.toLowerCase();
+    
+    // Check if completion relates to recent symbols
+    const relevantSymbols = context.symbols.filter(s => 
+      prefixLower.includes(s.name.toLowerCase()) ||
+      completionLower.includes(s.name.toLowerCase())
+    );
+    
+    return relevantSymbols.length > 0;
   }
 
   /**
