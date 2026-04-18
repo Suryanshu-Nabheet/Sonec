@@ -3,36 +3,26 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/Version-0.1.0-blue.svg)]()
 
-# SONEC — Autonomous Code Engine
-
-**Structured Omniscient Neural Editor & Compiler** - Production-grade VS Code extension for autonomous code completion, transformation, and multi-file intelligence.
+SONEC is a production-grade autonomous code engine designed for high-velocity software engineering. By aggressively minimizing end-to-end latency and structurally mapping cross-file dependencies, it provides real-time intelligent completions without degrading IDE performance.
 
 ---
 
-## ✨ Premium Features
+## High-Performance Engineering
 
-- **🧠 Intelligent Code Completion**: Advanced context-aware completions with fallback mechanisms
-- **⚡ Supermaven-Grade Suggestions**: Premium code predictions even in minimal contexts
-- **🔄 Autonomous Refactoring**: Automatic code improvements and optimizations
-- **🎯 Predictive Navigation**: Smart jump-to-next-edit functionality
-- **🌐 Multi-Provider Support**: OpenAI, Anthropic, Ollama, and custom endpoints
-- **📡 Real-time Streaming**: Instant responses with cancellation support
-- **📚 Project Learning**: Adapts to your coding style and patterns
-- **🚀 Production-Grade UI**: Clean, professional interface without intrusive messages
+The extension has been rearchitected from the ground up to achieve state-of-the-art responsiveness and strictly adhere to sub-100ms response targets:
 
-## 🔧 Core Capabilities
+- **Zero-Latency Predictive Ghost Text**: Intelligent keystroke continuity. The engine tracks partial cache states against user input, instantly fast-forwarding and accurately slicing predictive text on every keystroke without requiring secondary LLM API roundtrips.
+- **Parallel Context Matrix**: Deep project synchronization happens instantly. Multi-file graph traversal, symbol impact isolation, git history, and semantic structure detection are aggregated via highly parallelized background routines.
+- **Dynamic Semantic Outdenting**: Deep awareness of structural code blocks. The system monitors live cursor indentation and halts prediction execution immediately upon detecting syntax scope termination (e.g., exiting a class or interface), massively capping token burn and preventing model hallucination.
+- **Pristine Operating Silence**: A professional-grade integration. The prediction and trajectory engines function completely invisibly, resolving tasks autonomously without populating the editor with obtrusive popups, loading notifications, or tracking indicators.
 
-- **Autonomous Inline Completions**: Real-time code generation powered by a context-aware ranking engine.
-- **Architectural Transformations**: Multi-file refactoring and feature implementation via planned atomic actions.
-- **Speculative Prefetching**: Reduces perceived latency by pre-calculating completions using trajectory analysis.
-- **Deep Contextual Awareness**: Analyzes symbols, imports, git history, and project-specific coding patterns.
-- **Transaction-Safe Edits**: Complex changes are applied atomically with a reliable multi-file undo stack.
+## Core Capabilities
 
-- **Predictive Navigation**: Smart jump-to-next-edit functionality
-- **Multi-Provider Support**: OpenAI, Anthropic, Ollama, and custom endpoints
-- **Real-time Streaming**: Instant responses with cancellation support
-- **Project Learning**: Adapts to your coding style and patterns
-- **Production-Grade UI**: Clean, professional interface without intrusive messages
+- **Autonomous Inline Completions**: Real-time generation powered by deterministic contextual rankers.
+- **Architectural Transformations**: Deep multi-file refactoring executed as guaranteed atomic transactions via a proprietary undo stack.
+- **Speculative Prefetching**: Predicts target editing destinations and resolves logic completions before cursor navigation.
+- **Project Learning**: Learns your architectural conventions natively.
+- **Multi-Provider Connectivity**: Connect your local (Ollama) or remote (OpenAI, Anthropic) instances securely.
 
 ## Getting Started
 
@@ -45,7 +35,7 @@
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/Suryanshu-Nabheet/Sonec.git
+   git clone https://github.com/Suryanshu-Nabheet/sonec.git
    ```
 
 2. **Initialize development environment**:
@@ -64,7 +54,7 @@
 
 ## Documentation
 
-For deep dives into the engine's internals and contributing guidelines, see the standard documentation:
+Extensive documentation of the underlying architecture and APIs is available:
 
 - [Architecture Overview](./docs/ARCHITECTURE.md)
 - [Internal API Documentation](./docs/API.md)

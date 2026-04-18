@@ -1,40 +1,43 @@
 # SONEC Architecture Overview
 
-SONEC (Structured Omniscient Neural Editor & Compiler) is an autonomous code engine designed for high-performance, context-aware code generation.
+SONEC (Structured Omniscient Neural Editor & Compiler) operates via an aggressively optimized, event-driven graph architecture targeting absolute zero-latency execution.
 
-## Core Components
+## Core Systems
 
 ### 1. Context Engine (`src/context/`)
-The Context Engine is responsible for gathering all relevant information before a prediction is made. It uses several specialized analyzers:
-- **Symbol Analyzer**: Extracts structural information (classes, functions, methods) from the current file.
-- **Import Analyzer**: Resolves dependencies and understands external library usage.
-- **Git Analyzer**: Provides temporal context by analyzing recent changes and diffs.
-- **Project Graph**: Maintains an architectural overview of the entire workspace.
+The foundational data layer. Operations in this engine are strictly parallelized to eliminate compounding I/O latency.
+- **Symbol Analyzer**: Captures localized semantics and document hierarchy.
+- **Import Mapping**: Topologically links required external or intra-repository dependencies.
+- **Git State Analyzer**: Injects temporal diff awareness.
+- **Semantic Resolver**: Performs complex cross-module lookup resolving execution dependencies simultaneously alongside local context parsing.
 
 ### 2. Prediction Engine (`src/prediction/`)
-The "brain" of SONEC. It takes the ranked context from the Context Engine and translates it into:
-- **Inline Completions**: Real-time code suggestions as you type.
-- **Action Plans**: Multi-file transformations and refactors.
-- **Trajectory Tracking**: Predicts the developer's next move based on historical edits.
+The algorithmic reasoning module. It translates parallelized context graphs into direct syntactic suggestions.
+- **Token Optimization**: Enforces stringent token boundaries tailored precisely to line depth, averting over-generation blocking behavior.
+- **Semantic Stop Sequences**: Actively reads local cursor indentation to inject dynamic exit tokens, physically halting model generation exactly when block scope falls out of boundary.
+- **Speculative Pathing**: Evaluates cursor trajectory to generate prefetch vectors for proactive completions.
 
-### 3. Execution Engine (`src/execution/`)
-Handles the safe application of predicted changes.
-- **Action Execution**: Applies `ActionPlans` atomically.
-- **Undo Management**: Allows developers to revert complex multi-file changes instantly.
+### 3. Edge Presentation (`src/providers/`)
+The `SonecCompletionProvider` handles seamless VS Code integration.
+- **Fast-Forward Proxy**: Enables continuous typing validation. Scans user input against in-memory completion caches, visually trimming and injecting output immediately to achieve `0ms` response times.
+- **Stealth Integration**: Exists outside of the VS Code notification daemon to eliminate all disruptive status messages.
 
-### 4. Model Layer (`src/models/`)
-Abstractions over various LLM providers (Ollama, OpenAI, Anthropic). It handles:
-- **Prompt Building**: Transforming raw context into highly effective prompts.
-- **Streaming**: Delivering completions chunk-by-chunk for zero perceived latency.
+### 4. Execution Engine (`src/execution/`)
+Manages safe application environments.
+- **Atomic Application**: Commits predictions across an N-file topology.
+- **Transactional Rollback**: Backs up edits allowing absolute reversal of severe operational errors.
 
-## Data Flow
+### 5. Model Abstraction (`src/models/`)
+Provider interface layer (OpenAI, Anthropic, Ollama) engineered to support strict cancellation routines, request caching arrays, and raw response streaming.
 
-1. **Trigger**: User types or moves cursor (detected in `extension.ts`).
-2. **Context Assembly**: `ContextEngine` gathers data from analyzers.
-3. **Inference**: `PredictionEngine` calls `ModelLayer` with optimized prompts.
-4. **Caching**: Results are stored in `CompletionCache` for sub-millisecond retrieval on repeat requests.
-5. **Display**: suggestions are shown via `SonecCompletionProvider`.
+## Operational Lifecycle
+
+1. **Keystroke / Cursor Mutation**: Fired natively via VS Code abstractions. 
+2. **Fast-Forward Evaluation**: Checks memory caches for overlapping token trajectories. On hit, visual update completes in `< 1ms`.
+3. **Parallel Discovery**: On miss, `ContextEngine` blasts out multiple concurrent analysis requests globally.
+4. **Targeted Inference**: `PredictionEngine` caps response size and triggers language model socket.
+5. **Real-time Splice**: `SonecCompletionProvider` mounts the sequence onto the ghost text layer visually blocking further network noise.
 
 ## Contributing
 
-Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for details on how to get started.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for deeper workflow implementation guidelines.
