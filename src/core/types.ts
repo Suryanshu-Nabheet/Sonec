@@ -388,7 +388,7 @@ export type SonecEvent =
   | { type: 'completion_triggered'; data: { file: string; position: vscode.Position } }
   | { type: 'completion_shown'; data: { id: string; confidence: number } }
   | { type: 'completion_accepted'; data: { id: string; partial: boolean } }
-  | { type: 'completion_dismissed'; data: { id: string; reason: string } }
+  | { type: 'completion_dismissed'; data: { id: string; reason: string; text?: string; file?: string; line?: number } }
   | { type: 'action_applied'; data: { actionPlanId: string; success: boolean } }
   | { type: 'next_edit_jumped'; data: { file: string; position: vscode.Position } }
   | { type: 'context_rebuilt'; data: { tokenCount: number; latencyMs: number } }

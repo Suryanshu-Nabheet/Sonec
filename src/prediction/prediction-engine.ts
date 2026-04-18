@@ -35,6 +35,7 @@ export class PredictionEngine implements vscode.Disposable {
   private pendingPredictions: Map<string, PredictedEdit[]> = new Map();
   private nextEditPredictions: NextEditPrediction[] = [];
   private speculativePlan: ActionPlan | null = null;
+  private recentRejections: Array<{text: string; file?: string; line?: number; timestamp: number}> = [];
   private idCounter = 0;
 
   constructor(modelLayer: ModelLayer) {
@@ -44,6 +45,19 @@ export class PredictionEngine implements vscode.Disposable {
     this.modelLayer = modelLayer;
     this.promptBuilder = new PromptBuilder();
     this.cache = new CompletionCache();
+
+    // Listen for negative feedback
+    this.eventBus.on('completion_dismissed', (data: any) => {
+        if (data.text) {
+            this.recentRejections.push({
+                text: data.text,
+                file: data.file,
+                line: data.line,
+                timestamp: Date.now()
+            });
+            if (this.recentRejections.length > 20) this.recentRejections.shift();
+        }
+    });
   }
 
   /**
@@ -75,7 +89,19 @@ export class PredictionEngine implements vscode.Disposable {
       if (token.isCancellationRequested) {return null;}
 
       // Build prompt
-      const prompt = this.promptBuilder.buildCompletionPrompt(context);
+      let prompt = this.promptBuilder.buildCompletionPrompt(context);
+
+      // Inject Negative Feedback to prevent exact duplicate hallucination!
+      const relevantRejections = this.recentRejections.filter(r => 
+        Date.now() - r.timestamp < 300000 && // Within last 5 mins
+        (!r.file || r.file === context.currentFile.file.relativePath) && 
+        (!r.line || Math.abs(r.line - context.currentFile.position.line) <= 2)
+      );
+
+      if (relevantRejections.length > 0) {
+          const rejectedText = relevantRejections.map(r => r.text).join('\n---\n');
+          prompt += `\n\n[NEGATIVE FEEDBACK]:\nThe user explicitly REJECTED the following suggestions here. DO NOT generate these strings again. Try a different approach:\n${rejectedText}\n[END NEGATIVE FEEDBACK]\n\n`;
+      }
       const startTime = Date.now();
       let completionText = '';
 
