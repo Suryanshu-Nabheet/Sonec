@@ -39,7 +39,7 @@ export class ModelLayer implements vscode.Disposable {
   private adapters: Map<ModelProvider, ProviderAdapter> = new Map();
   private requestCount = 0;
   private lastRequestTime = 0;
-  private readonly MIN_REQUEST_INTERVAL_MS = 100; // Rate limiting
+  private readonly MIN_REQUEST_INTERVAL_MS = 0; // Rate limiting
   private pendingRequests: Map<ModelRequestCategory, AbortController> = new Map();
 
   constructor() {

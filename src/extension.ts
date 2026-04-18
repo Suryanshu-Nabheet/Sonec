@@ -120,10 +120,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const jumpIndicator = new JumpIndicatorManager();
   disposables.push(jumpIndicator);
 
-  const jumpStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  jumpStatusBar.command = 'sonec.jumpToNextEdit';
-  jumpStatusBar.tooltip = 'Navigate to next suggested edit';
-  disposables.push(jumpStatusBar);
+
 
   // ─── 9. Initialize Completion Provider ───
   const completionProvider = new SonecCompletionProvider(
@@ -155,9 +152,9 @@ export function activate(context: vscode.ExtensionContext): void {
   disposables.push(vscode.commands.registerCommand('sonec.checkStatus', async () => {
     const status = await modelLayer.checkStatus();
     if (status.ok) {
-        vscode.window.showInformationMessage(`SONEC Status: OK. Provider: ${status.provider}, Model: ${status.model}`);
+        vscode.window.showInformationMessage(`Status: OK. Provider: ${status.provider}, Model: ${status.model}`);
     } else {
-        vscode.window.showErrorMessage(`SONEC Status: ERROR. ${status.error}`);
+        vscode.window.showErrorMessage(`Status: ERROR. ${status.error}`);
     }
   }));
 
@@ -167,21 +164,12 @@ export function activate(context: vscode.ExtensionContext): void {
       jumpIndicator.updateIndicator(topPrediction);
       const hasTarget = !!topPrediction;
       vscode.commands.executeCommand('setContext', 'sonec.hasNextEdit', hasTarget);
-      
-      if (hasTarget) {
-          jumpStatusBar.text = '$(arrow-right)';
-          jumpStatusBar.tooltip = 'Next edit location available';
-          jumpStatusBar.show();
-      } else {
-          jumpStatusBar.hide();
-      }
   };
 
   eventBus.on('next_edits_updated', updateJumpUI);
   eventBus.on('action_applied', () => {
       jumpIndicator.clearIndicators();
       vscode.commands.executeCommand('setContext', 'sonec.hasNextEdit', false);
-      jumpStatusBar.hide();
   });
 
   // ─── 10. Set up Document Event Listeners ───
@@ -206,7 +194,7 @@ export function activate(context: vscode.ExtensionContext): void {
   if (!config.isReady()) {
     const openSettings = 'Open Settings';
     vscode.window.showInformationMessage(
-      'SONEC: Configure your API key to enable autonomous completions.',
+      'Configure your API key to enable autonomous completions.',
       openSettings
     ).then((selected) => {
       if (selected === openSettings) {
@@ -312,7 +300,7 @@ function setupDocumentListeners(
                   // Silent
               }
           }
-      }, 2000); // Only update trajectory after 2 seconds of idleness
+      }, 50); // Instantly update trajectory
     })
   );
 }

@@ -69,7 +69,7 @@ export class CommandHandlers implements vscode.Disposable {
   private async autonomousFix(): Promise<void> {
       await vscode.window.withProgress({
           location: vscode.ProgressLocation.Window,
-          title: 'SONEC: Autonomous fixing...'
+          title: 'Autonomous fixing...'
       }, async () => {
           await this.refactorEngine.scanAndRefactor();
       });
@@ -318,7 +318,7 @@ export class CommandHandlers implements vscode.Disposable {
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: 'SONEC: Analyzing transformation...',
+          title: 'Analyzing transformation...',
           cancellable: true,
         },
         async (progress, progressToken) => {
@@ -342,7 +342,7 @@ export class CommandHandlers implements vscode.Disposable {
 
           if (!plan) {
             vscode.window.showWarningMessage(
-              'SONEC: Could not generate transformation'
+              'Could not generate transformation'
             );
             return;
           }
@@ -356,7 +356,7 @@ export class CommandHandlers implements vscode.Disposable {
             .join('\n');
 
           const confirm = await vscode.window.showInformationMessage(
-            `SONEC: ${plan.actions.length} action(s) planned.\n\n${actionSummary}`,
+            `${plan.actions.length} action(s) planned.\n\n${actionSummary}`,
             { modal: true },
             'Apply',
             'Cancel'
@@ -370,11 +370,11 @@ export class CommandHandlers implements vscode.Disposable {
 
           if (success) {
             vscode.window.showInformationMessage(
-              `SONEC: Applied ${plan.actions.length} action(s) successfully`
+              `Applied ${plan.actions.length} action(s) successfully`
             );
           } else {
             vscode.window.showErrorMessage(
-              'SONEC: Transformation failed. Check output for details.'
+              'Transformation failed. Check output for details.'
             );
           }
         }
@@ -446,9 +446,7 @@ export class CommandHandlers implements vscode.Disposable {
       .getConfiguration('sonec')
       .update('enabled', !current, true);
 
-    vscode.window.showInformationMessage(
-      `SONEC: ${!current ? 'Enabled' : 'Disabled'}`
-    );
+    this.logger.info(`Engine ${!current ? 'Enabled' : 'Disabled'}`);
   }
 
   /**
@@ -456,16 +454,14 @@ export class CommandHandlers implements vscode.Disposable {
    */
   private async clearCache(): Promise<void> {
     // Individual modules handle their own caches
-    vscode.window.showInformationMessage('SONEC: Cache cleared');
+    this.logger.info('Cache cleared');
   }
 
   /**
    * Re-index the project to refresh style and symbol data.
    */
   private async reindexProject(): Promise<void> {
-    vscode.window.showInformationMessage(
-      'SONEC: Re-indexing project... (style patterns and symbols will be refreshed)'
-    );
+    this.logger.info('Re-indexing project...');
   }
 
   /**

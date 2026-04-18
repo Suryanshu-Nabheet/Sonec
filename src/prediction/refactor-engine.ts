@@ -103,15 +103,7 @@ export class AutonomousRefactorEngine implements vscode.Disposable {
             // Notify via event bus or status bar (implemented in CommandHandlers/PerformanceMonitor)
             vscode.commands.executeCommand('setContext', 'sonec.transformationReady', true);
             
-            // Non-intrusive notification
-            vscode.window.showInformationMessage(
-                `SONEC: Autonomous refactor ready to fix ${allIssues.length} issues.`,
-                'View Changes'
-            ).then(selection => {
-                if (selection === 'View Changes') {
-                    vscode.commands.executeCommand('sonec.showPredictedEdits');
-                }
-            });
+            // Removed intrusive popup notification
         }
     } catch (err) {
         this.logger.error('Autonomous refactor scan failed', err);

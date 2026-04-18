@@ -17,7 +17,7 @@ const DEFAULT_CONFIG: SonecConfig = {
   apiKey: '',
   apiEndpoint: 'http://localhost:11434',
   maxContextTokens: 8192,
-  debounceMs: 50,
+  debounceMs: 0,
   prefetchEnabled: true,
   multiFileEnabled: true,
   maxCompletionLines: 50,

@@ -207,7 +207,7 @@ export class SonecCompletionProvider
     
     // Command to trigger after acceptance
     item.command = {
-        title: 'SONEC: Post-Acceptance Hook',
+        title: 'Post-Acceptance Hook',
         command: 'sonec.onCompletionAccepted',
         arguments: [completion]
     };
@@ -356,7 +356,7 @@ export class SonecCompletionProvider
 
     const nextPosition = new vscode.Position(endLine, endChar);
 
-    // Delay prefetch to avoid interfering with current completion
+    // Delay prefetch to avoid interfering with current completion (minimized)
     setTimeout(async () => {
       try {
         const cts = new vscode.CancellationTokenSource();
@@ -384,7 +384,7 @@ export class SonecCompletionProvider
       } catch {
         // Prefetch failures are non-critical
       }
-    }, 200);
+    }, 5);
   }
 
   /**
