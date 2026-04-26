@@ -106,6 +106,16 @@ export class CommandHandlers implements vscode.Disposable {
     
     // Cleanup state
     this.completionProvider.dismiss();
+    
+    // Remove the prediction for the current line immediately to avoid "jump loops"
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+        this.predictionEngine.removePredictionAt(
+            editor.document.uri.fsPath,
+            editor.selection.active.line
+        );
+    }
+    
     this.predictionEngine.clearLastJumpTarget();
     
     // If there is a speculative plan attached, offer to apply it
@@ -188,9 +198,19 @@ export class CommandHandlers implements vscode.Disposable {
   private async jumpToNextEdit(): Promise<void> {
     const target = this.predictionEngine.getJumpTarget();
     if (!target) {
-      // If no predictions, try to generate them
       await this.generateNextEditPredictions();
       return;
+    }
+
+    // If already at the target line, don't jump again
+    const activeEditor = vscode.window.activeTextEditor;
+    const isAtTargetFile = activeEditor?.document.uri.fsPath.toLowerCase().endsWith(target.file.toLowerCase().replace(/\\/g, '/').split('/').pop() || '');
+    const isAtTargetLine = activeEditor?.selection.active.line === target.position.line;
+
+    if (isAtTargetFile && isAtTargetLine) {
+        // We are already there, just ensure the suggestion is triggered
+        await vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
+        return;
     }
 
     // Cancel any active inline suggestions to prevent collision

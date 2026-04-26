@@ -247,7 +247,7 @@ export class PredictionEngine implements vscode.Disposable {
       this.eventBus.emit({
           type: 'next_edits_updated',
           data: { predictions }
-      } as any);
+      });
 
       timer();
       return predictions;
@@ -282,6 +282,20 @@ export class PredictionEngine implements vscode.Disposable {
    */
   public clearLastJumpTarget(): void {
       this.lastJumpTarget = null;
+  }
+
+  /**
+   * Remove a prediction at a specific location.
+   */
+  public removePredictionAt(file: string, line: number): void {
+      this.nextEditPredictions = this.nextEditPredictions.filter(p => 
+          !(p.file.toLowerCase().endsWith(file.toLowerCase().replace(/\\/g, '/').split('/').pop() || '') && p.position.line === line)
+      );
+      this.lastJumpTarget = null;
+      this.eventBus.emit({
+          type: 'next_edits_updated',
+          data: { predictions: this.nextEditPredictions }
+      });
   }
 
   /**
