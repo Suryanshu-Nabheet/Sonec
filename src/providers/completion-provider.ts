@@ -125,27 +125,35 @@ export class SonecCompletionProvider
       });
 
       // 1. Speculative latency reduction: Check for jump-target matches
+      // Use both current predictions AND the last jump target (sticky) to avoid race conditions
       const predictions = this.predictionEngine.getNextEditPredictions();
-      const matchingPrediction = predictions.find(p => 
+      const lastTarget = this.predictionEngine.getLastJumpTarget();
+      
+      const allCandidates = lastTarget ? [...predictions, lastTarget] : predictions;
+
+      const matchingPrediction = allCandidates.find(p => 
         p.file.toLowerCase().endsWith(document.uri.fsPath.toLowerCase().replace(/\\/g, '/').split('/').pop() || '') &&
         p.position.line === position.line
       );
 
-      if (matchingPrediction && matchingPrediction.suggestedAction && 'code' in matchingPrediction.suggestedAction) {
-          const predictedCode = matchingPrediction.suggestedAction.code;
-          if (predictedCode) {
-              const result: CompletionResult = {
-                  id: `pred-${Date.now()}`,
-                  text: predictedCode,
-                  insertText: predictedCode,
-                  range: new vscode.Range(position, position),
-                  confidence: matchingPrediction.confidence,
-                  source: 'block',
-                  metadata: { modelLatencyMs: 0, contextTokens: 0, completionTokens: 0, cached: true }
-              };
-              this.logger.debug('Using predicted edit as instant completion');
-              return [this.createInlineItem(result, position, document)];
-          }
+      if (matchingPrediction && matchingPrediction.suggestedAction) {
+          const action = matchingPrediction.suggestedAction;
+          const code = 'code' in action ? action.code : '';
+          const range = 'range' in action 
+            ? new vscode.Range(action.range.startLine, action.range.startCharacter, action.range.endLine, action.range.endCharacter)
+            : new vscode.Range(position, position);
+
+          const result: CompletionResult = {
+              id: `pred-${Date.now()}`,
+              text: code,
+              insertText: code,
+              range: range,
+              confidence: matchingPrediction.confidence,
+              source: 'block',
+              metadata: { modelLatencyMs: 0, contextTokens: 0, completionTokens: 0, cached: true }
+          };
+          this.logger.debug(`Using predicted ${action.type} as instant completion`);
+          return [this.createInlineItem(result, position, document)];
       }
 
       // 2. Latency reduction: Check for prefetched results

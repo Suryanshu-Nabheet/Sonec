@@ -34,6 +34,8 @@ export class PredictionEngine implements vscode.Disposable {
   private cache: CompletionCache;
   private pendingPredictions: Map<string, PredictedEdit[]> = new Map();
   private nextEditPredictions: NextEditPrediction[] = [];
+  private lastJumpTarget: NextEditPrediction | null = null;
+  private trajectoryContext: any = null;
   private speculativePlan: ActionPlan | null = null;
   private recentRejections: Array<{text: string; file?: string; line?: number; timestamp: number}> = [];
   private idCounter = 0;
@@ -258,14 +260,28 @@ export class PredictionEngine implements vscode.Disposable {
   }
 
   /**
-   * Get buffered next-edit predictions and find the best jump target.
-   * @returns The best jump target or null
+   * Get the best jump target from the current predictions.
+   * Stores the target as lastJumpTarget to ensure UI consistency during navigation.
    */
   public getJumpTarget(): NextEditPrediction | null {
     if (this.nextEditPredictions.length === 0) return null;
-    // Return the highest confidence prediction
     const best = [...this.nextEditPredictions].sort((a, b) => b.confidence - a.confidence)[0];
+    this.lastJumpTarget = best;
     return best;
+  }
+
+  /**
+   * Get the most recently requested jump target (sticky).
+   */
+  public getLastJumpTarget(): NextEditPrediction | null {
+      return this.lastJumpTarget;
+  }
+
+  /**
+   * Clear the last jump target (e.g. after acceptance).
+   */
+  public clearLastJumpTarget(): void {
+      this.lastJumpTarget = null;
   }
 
   /**
@@ -585,27 +601,41 @@ export class PredictionEngine implements vscode.Disposable {
                 confidence: p.confidence || 0.5
             };
           } else if (p.suggestedChange) {
+            // Heuristic: If we are inserting at the start of a line that already has code, 
+            // it's almost certainly a "fix" that should replace the line.
+            const isAtLineStart = true; // Predictions are currently always at char 0
+            const shouldReplace = type === 'replace' || isAtLineStart;
+
             suggestedAction = {
-                type: type === 'replace' ? 'replace' : 'insert',
+                type: shouldReplace ? 'replace' : 'insert',
                 file: p.file,
                 confidence: p.confidence || 0.5,
                 code: p.suggestedChange
             };
 
-            if (type === 'replace') {
-                suggestedAction.range = { startLine: p.line, startCharacter: 0, endLine: p.line + 1, endCharacter: 0 };
+            if (shouldReplace) {
+                // Replace the entire line from start to beginning of next line
+                suggestedAction.range = { 
+                    startLine: p.line, 
+                    startCharacter: 0, 
+                    endLine: p.line + 1, 
+                    endCharacter: 0 
+                };
             } else {
                 suggestedAction.position = { line: p.line, character: 0 };
             }
           }
 
-          return {
+          const prediction = {
             file: p.file,
             position: new vscode.Position(p.line, 0),
             reason: p.reason || '',
             confidence: Math.min(1, Math.max(0, p.confidence || 0.5)),
             suggestedAction
           };
+
+          this.logger.debug(`AI Prediction: ${prediction.reason} at ${prediction.file}:${prediction.position.line} (Type: ${suggestedAction?.type || 'none'})`);
+          return prediction;
         });
     } catch {
       return [];

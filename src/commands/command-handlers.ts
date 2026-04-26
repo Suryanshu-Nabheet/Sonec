@@ -101,19 +101,21 @@ export class CommandHandlers implements vscode.Disposable {
    * Post-acceptance hook to trigger predictions and cleanup.
    */
   private async onCompletionAccepted(completion: any): Promise<void> {
-      this.logger.debug(`Completion accepted: ${completion.id}`);
-      
-      // Cleanup current completion state
-      this.completionProvider.dismiss();
-      
-      // If there is a speculative plan attached, offer to apply it
-      const plan = this.predictionEngine.getSpeculativePlan();
-      if (plan && plan.actions.length > 0) {
-          vscode.commands.executeCommand('setContext', 'sonec.transformationReady', true);
-      }
+    this.logger.debug(`Completion accepted: ${completion.id}`);
+    this.perfMonitor.recordAccepted();
+    
+    // Cleanup state
+    this.completionProvider.dismiss();
+    this.predictionEngine.clearLastJumpTarget();
+    
+    // If there is a speculative plan attached, offer to apply it
+    const plan = this.predictionEngine.getSpeculativePlan();
+    if (plan && plan.actions.length > 0) {
+        vscode.commands.executeCommand('setContext', 'sonec.transformationReady', true);
+    }
 
-      // Immediately trigger predictive trajectory update
-      await this.generateNextEditPredictions();
+    // Immediately trigger predictive trajectory update
+    await this.generateNextEditPredictions();
   }
 
   /**
@@ -197,18 +199,11 @@ export class CommandHandlers implements vscode.Disposable {
     // Navigate to the location
     await this.navigateToEdit(target.file, target.position);
 
-    // If the suggestion is a fix (delete or replace), apply it immediately
-    const action = target.suggestedAction;
-    if (action && (action.type === 'delete' || action.type === 'replace')) {
-        await this.actionEngine.executeAction(action);
-        const msg = action.type === 'delete' ? 'Code removed.' : 'Issue fixed.';
-        vscode.window.setStatusBarMessage(msg, 2000);
-    } else {
-        // Trigger inline suggestion for insertions
-        setTimeout(() => {
-            vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
-        }, 50);
-    }
+    // Trigger inline suggestion for preview (insert/replace/delete)
+    // The CompletionProvider will handle showing the ghost text or removal preview.
+    setTimeout(() => {
+        vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
+    }, 50);
 
     // Proactively generate the AFTER-next predictions
     this.generateNextEditPredictions();
