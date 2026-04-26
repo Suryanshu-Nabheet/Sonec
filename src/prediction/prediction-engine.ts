@@ -261,11 +261,11 @@ export class PredictionEngine implements vscode.Disposable {
    * Get buffered next-edit predictions and find the best jump target.
    * @returns The best jump target or null
    */
-  public getJumpTarget(): { file: string; position: vscode.Position } | null {
+  public getJumpTarget(): NextEditPrediction | null {
     if (this.nextEditPredictions.length === 0) return null;
     // Return the highest confidence prediction
     const best = [...this.nextEditPredictions].sort((a, b) => b.confidence - a.confidence)[0];
-    return { file: best.file, position: best.position };
+    return best;
   }
 
   /**

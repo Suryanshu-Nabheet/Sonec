@@ -284,21 +284,27 @@ export class CommandHandlers implements vscode.Disposable {
 
     try {
       const doc = await vscode.workspace.openTextDocument(uri);
+      
+      // Calculate better character position (end of line or after indentation)
+      const line = doc.lineAt(Math.min(position.line, doc.lineCount - 1));
+      const targetChar = line.firstNonWhitespaceCharacterIndex;
+      const targetPosition = new vscode.Position(line.lineNumber, targetChar);
+
       const editor = await vscode.window.showTextDocument(doc, {
-        selection: new vscode.Range(position, position),
+        selection: new vscode.Range(targetPosition, targetPosition),
         preview: false,
       });
 
-      // Center the view on the target line
+      // Smoothly reveal the target
       editor.revealRange(
-        new vscode.Range(position, position),
-        vscode.TextEditorRevealType.InCenter
+        new vscode.Range(targetPosition, targetPosition),
+        vscode.TextEditorRevealType.InCenterIfOutsideViewport
       );
 
       // Trigger inline suggestion immediately
       setTimeout(() => {
           vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
-      }, 100);
+      }, 50);
     } catch (err) {
       this.logger.error(`Failed to navigate to ${filePath}`, err);
     }

@@ -160,9 +160,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // ─── 9. Set up Domain Event Listeners ───
   const updateJumpUI = () => {
-      const topPrediction = predictionEngine.getJumpTarget();
-      jumpIndicator.updateIndicator(topPrediction);
-      const hasTarget = !!topPrediction;
+      const predictions = predictionEngine.getNextEditPredictions();
+      jumpIndicator.updateIndicator(predictions);
+      const hasTarget = predictions.length > 0;
       vscode.commands.executeCommand('setContext', 'sonec.hasNextEdit', hasTarget);
   };
 
@@ -267,6 +267,9 @@ function setupDocumentListeners(
   let pathingTimer: NodeJS.Timeout | null = null;
   disposables.push(
     vscode.window.onDidChangeTextEditorSelection((event) => {
+      // Instantly refresh UI position (e.g. badge follows cursor)
+      updateJumpUI();
+
       if (selectionTimer) {
         clearTimeout(selectionTimer);
       }
