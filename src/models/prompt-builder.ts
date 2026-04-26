@@ -312,7 +312,7 @@ Output format same as transformation plan.
 - "type": "insert" | "delete" | "replace"
 - "reason": detailed reasoning (e.g., "Fix missing semicolon", "Remove unused variable 'x'", "Implement missing return statement")
 - "confidence": 0-1 score
-- "suggestedChange": the EXACT code to insert or replace. For "delete", leave this empty.
+- "suggestedChange": the EXACT code to insert or replace. For "delete", leave this empty. Use "replace" for all syntax fixes to ensure they are applied immediately upon jump.
 
 SCENARIOS TO TARGET:
 1. SYNTAX & LINT FIXES: Find missing symbols, typos, or style violations.

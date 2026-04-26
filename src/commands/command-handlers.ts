@@ -194,15 +194,17 @@ export class CommandHandlers implements vscode.Disposable {
     // Navigate to the location
     await this.navigateToEdit(target.file, target.position);
 
-    // If the suggestion is a deletion, apply it immediately
-    if (target.suggestedAction?.type === 'delete') {
-        await this.actionEngine.executeAction(target.suggestedAction);
-        vscode.window.setStatusBarMessage('Code removed.', 2000);
+    // If the suggestion is a fix (delete or replace), apply it immediately
+    const action = target.suggestedAction;
+    if (action && (action.type === 'delete' || action.type === 'replace')) {
+        await this.actionEngine.executeAction(action);
+        const msg = action.type === 'delete' ? 'Code removed.' : 'Issue fixed.';
+        vscode.window.setStatusBarMessage(msg, 2000);
     } else {
-        // Trigger inline suggestion for insertions/replacements
+        // Trigger inline suggestion for insertions
         setTimeout(() => {
             vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
-        }, 150);
+        }, 50);
     }
 
     // Proactively generate the AFTER-next predictions
