@@ -81,18 +81,19 @@ export class JumpIndicatorManager implements vscode.Disposable {
     const currentLineRange = editor.document.lineAt(currentLine).range;
 
     // Determine dynamic badge text based on relative destination
-    let badgeText = ' ⇥ TAB to jump';
+    let badgeText = '';
     const targetFileName = target.file.split(/[/\\]/).pop() || target.file;
     const isDifferentFile = !editor.document.uri.fsPath.toLowerCase().endsWith(target.file.toLowerCase().replace(/\\/g, '/').split('/').pop() || '');
     
     if (isDifferentFile) {
-        badgeText = ` ⇥ TAB to ${targetFileName}`;
+        badgeText = ` ⇥ TAB to ${targetFileName} `;
     } else {
         const lineDiff = target.position.line - currentLine;
         if (lineDiff === 0) {
-            badgeText = ' ⇥ TAB to edit';
+            // Already at target - don't show badge if suggestion will be shown
+            return;
         } else {
-            badgeText = ` ⇥ TAB to line ${target.position.line + 1}`;
+            badgeText = ` ⇥ TAB to line ${target.position.line + 1} `;
         }
     }
 
@@ -102,9 +103,9 @@ export class JumpIndicatorManager implements vscode.Disposable {
         renderOptions: {
             after: {
                 contentText: badgeText,
-                // Premium coloring for high-confidence predictions
-                color: target.confidence > 0.8 ? new vscode.ThemeColor('button.foreground') : undefined,
-                backgroundColor: target.confidence > 0.8 ? new vscode.ThemeColor('button.background') : undefined,
+                color: target.confidence > 0.8 ? new vscode.ThemeColor('button.foreground') : new vscode.ThemeColor('descriptionForeground'),
+                backgroundColor: target.confidence > 0.8 ? new vscode.ThemeColor('button.background') : new vscode.ThemeColor('badge.background'),
+                border: '1px solid #555',
             }
         }
     };
