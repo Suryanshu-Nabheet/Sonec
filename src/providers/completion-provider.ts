@@ -124,15 +124,38 @@ export class SonecCompletionProvider
         },
       });
 
-      // Speculative latency reduction
-      // If we have a prefetch for this exact position, use it immediately
+      // 1. Speculative latency reduction: Check for jump-target matches
+      const predictions = this.predictionEngine.getNextEditPredictions();
+      const matchingPrediction = predictions.find(p => 
+        p.file.toLowerCase().endsWith(document.uri.fsPath.toLowerCase().replace(/\\/g, '/').split('/').pop() || '') &&
+        p.position.line === position.line
+      );
+
+      if (matchingPrediction && matchingPrediction.suggestedAction && 'code' in matchingPrediction.suggestedAction) {
+          const predictedCode = matchingPrediction.suggestedAction.code;
+          if (predictedCode) {
+              const result: CompletionResult = {
+                  id: `pred-${Date.now()}`,
+                  text: predictedCode,
+                  insertText: predictedCode,
+                  range: new vscode.Range(position, position),
+                  confidence: matchingPrediction.confidence,
+                  source: 'block',
+                  metadata: { modelLatencyMs: 0, contextTokens: 0, completionTokens: 0, cached: true }
+              };
+              this.logger.debug('Using predicted edit as instant completion');
+              return [this.createInlineItem(result, position, document)];
+          }
+      }
+
+      // 2. Latency reduction: Check for prefetched results
       const prefetchKey = `${document.uri.fsPath}:${position.line}:${position.character}`;
       if (this.prefetchResult && this.prefetchResult.key === prefetchKey) {
         this.logger.debug('Using prefetched completion');
         return [this.createInlineItem(this.prefetchResult.result, position, document)];
       }
 
-      // Build deep context
+      // 3. Build deep context
       const projectContext = await this.contextEngine.buildContext(
         document,
         position,

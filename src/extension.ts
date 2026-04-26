@@ -173,7 +173,7 @@ export function activate(context: vscode.ExtensionContext): void {
   });
 
   // ─── 10. Set up Document Event Listeners ───
-  setupDocumentListeners(contextEngine, predictionEngine);
+  setupDocumentListeners(contextEngine, predictionEngine, updateJumpUI);
 
   // ─── 10. Set Initial Context Keys ───
   vscode.commands.executeCommand('setContext', 'sonec.hasNextEdit', false);
@@ -226,7 +226,8 @@ export function deactivate(): void {
  */
 function setupDocumentListeners(
   contextEngine: ContextEngine,
-  _predictionEngine: PredictionEngine
+  _predictionEngine: PredictionEngine,
+  updateJumpUI: () => void
 ): void {
   const logger = Logger.getInstance();
 
