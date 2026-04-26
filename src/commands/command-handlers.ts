@@ -191,6 +191,9 @@ export class CommandHandlers implements vscode.Disposable {
       return;
     }
 
+    // Cancel any active inline suggestions to prevent collision
+    await vscode.commands.executeCommand('editor.action.inlineSuggest.hide');
+
     // Navigate to the location
     await this.navigateToEdit(target.file, target.position);
 

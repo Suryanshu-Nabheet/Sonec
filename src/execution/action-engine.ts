@@ -530,7 +530,7 @@ export class ActionExecutionEngine implements vscode.Disposable {
   }
 
   /**
-   * Resolve a relative file path to a Uri
+   * Resolve a relative file path to a Uri with fuzzy fallback
    */
   private async resolveFileUri(
     filePath: string
@@ -538,17 +538,26 @@ export class ActionExecutionEngine implements vscode.Disposable {
     const wsFolder = vscode.workspace.workspaceFolders?.[0];
     if (!wsFolder) {return null;}
 
-    const uri = vscode.Uri.joinPath(wsFolder.uri, filePath);
+    // 1. Direct path check
+    const directUri = vscode.Uri.joinPath(wsFolder.uri, filePath);
     try {
-      await vscode.workspace.fs.stat(uri);
-      return uri;
+      await vscode.workspace.fs.stat(directUri);
+      return directUri;
     } catch {
-      // Try as absolute path
+      // 2. Absolute path check
       try {
         const absUri = vscode.Uri.file(filePath);
         await vscode.workspace.fs.stat(absUri);
         return absUri;
       } catch {
+        // 3. Fuzzy search fallback (if AI provided only the filename)
+        const fileName = filePath.split(/[/\\]/).pop();
+        if (fileName) {
+            const files = await vscode.workspace.findFiles(`**/${fileName}`, undefined, 1);
+            if (files.length > 0) {
+                return files[0];
+            }
+        }
         return null;
       }
     }
