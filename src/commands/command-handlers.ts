@@ -191,12 +191,19 @@ export class CommandHandlers implements vscode.Disposable {
       return;
     }
 
+    // Navigate to the location
     await this.navigateToEdit(target.file, target.position);
 
-    // Refresh context and trigger inline suggestion at the new location
-    setTimeout(() => {
-        vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
-    }, 150);
+    // If the suggestion is a deletion, apply it immediately
+    if (target.suggestedAction?.type === 'delete') {
+        await this.actionEngine.executeAction(target.suggestedAction);
+        vscode.window.setStatusBarMessage('Code removed.', 2000);
+    } else {
+        // Trigger inline suggestion for insertions/replacements
+        setTimeout(() => {
+            vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
+        }, 150);
+    }
 
     // Proactively generate the AFTER-next predictions
     this.generateNextEditPredictions();

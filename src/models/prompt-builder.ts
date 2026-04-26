@@ -297,39 +297,31 @@ Output format same as transformation plan.
   }
 
   private severityName(severity: vscode.DiagnosticSeverity): string {
-      switch (severity) {
-          case vscode.DiagnosticSeverity.Error: return 'Error';
-          case vscode.DiagnosticSeverity.Warning: return 'Warning';
-          case vscode.DiagnosticSeverity.Information: return 'Info';
-          default: return 'Hint';
-      }
+    switch (severity) {
+      case vscode.DiagnosticSeverity.Error: return 'Error';
+      case vscode.DiagnosticSeverity.Warning: return 'Warning';
+      case vscode.DiagnosticSeverity.Information: return 'Info';
+      default: return 'Hint';
+    }
   }
 
   private buildNextEditInstruction(): string {
-    return `<instruction>
-Analyze the recent edit history, current file diagnostics (errors/warnings), and architectural patterns to predict the developer's absolute next logical move.
+    return `Output a JSON object with a "predictions" array. Each prediction MUST have:
+- "file": relative path to the file
+- "line": 0-indexed line number
+- "type": "insert" | "delete" | "replace"
+- "reason": detailed reasoning (e.g., "Fix missing semicolon", "Remove unused variable 'x'", "Implement missing return statement")
+- "confidence": 0-1 score
+- "suggestedChange": the EXACT code to insert or replace. For "delete", leave this empty.
 
-Process:
-1. Identify the most critical error or the next logical step in the task.
-2. Resolve the exact file and line number for this destination.
-3. Propose a brief suggested change.
+SCENARIOS TO TARGET:
+1. SYNTAX & LINT FIXES: Find missing symbols, typos, or style violations.
+2. DEAD CODE REMOVAL: Find unused variables, imports, or unreachable code.
+3. LOGICAL COMPLETION: Find the next necessary step in a sequence (e.g., after defining a function, predict its call or implementation).
+4. REFACTORING: Identify opportunities to simplify or improve the current logic.
 
-Output format:
-{
-  "reasoning": "Explain your logic for this prediction in 1-2 sentences",
-  "predictions": [
-    {
-      "file": "relative/path/to/file",
-      "line": N,
-      "reason": "Why this location?",
-      "confidence": 0.95,
-      "suggestedChange": "Brief snippet of the intended change"
-    }
-  ]
-}
-
-Output ONLY valid JSON.
-</instruction>`;
+Format:
+{"predictions": [{"file": "...", "line": 0, "type": "insert", "reason": "...", "confidence": 0.95, "suggestedChange": "..."}]}`;
   }
 
   public buildScaffoldPrompt(context: ProjectContext): string {

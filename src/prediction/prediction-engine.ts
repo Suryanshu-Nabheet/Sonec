@@ -573,21 +573,40 @@ export class PredictionEngine implements vscode.Disposable {
 
       return parsed.predictions
         .filter((p: any) => p.file && typeof p.line === 'number')
-        .map((p: any) => ({
-          file: p.file,
-          position: new vscode.Position(p.line, 0),
-          reason: p.reason || '',
-          confidence: Math.min(1, Math.max(0, p.confidence || 0.5)),
-          suggestedAction: p.suggestedChange
-            ? {
-                type: 'insert' as const,
+        .map((p: any) => {
+          const type = p.type || 'insert';
+          let suggestedAction: any = undefined;
+
+          if (type === 'delete') {
+            suggestedAction = {
+                type: 'delete',
                 file: p.file,
-                position: { line: p.line, character: 0 },
-                code: p.suggestedChange,
+                range: { startLine: p.line, startCharacter: 0, endLine: p.line + 1, endCharacter: 0 },
+                confidence: p.confidence || 0.5
+            };
+          } else if (p.suggestedChange) {
+            suggestedAction = {
+                type: type === 'replace' ? 'replace' : 'insert',
+                file: p.file,
                 confidence: p.confidence || 0.5,
-              }
-            : undefined,
-        }));
+                code: p.suggestedChange
+            };
+
+            if (type === 'replace') {
+                suggestedAction.range = { startLine: p.line, startCharacter: 0, endLine: p.line + 1, endCharacter: 0 };
+            } else {
+                suggestedAction.position = { line: p.line, character: 0 };
+            }
+          }
+
+          return {
+            file: p.file,
+            position: new vscode.Position(p.line, 0),
+            reason: p.reason || '',
+            confidence: Math.min(1, Math.max(0, p.confidence || 0.5)),
+            suggestedAction
+          };
+        });
     } catch {
       return [];
     }

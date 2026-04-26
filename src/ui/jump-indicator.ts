@@ -90,10 +90,16 @@ export class JumpIndicatorManager implements vscode.Disposable {
     } else {
         const lineDiff = target.position.line - currentLine;
         if (lineDiff === 0) {
-            // Already at target - don't show badge if suggestion will be shown
             return;
         } else {
-            badgeText = ` ⇥ TAB to line ${target.position.line + 1} `;
+            const actionType = target.suggestedAction?.type || 'insert';
+            if (actionType === 'delete') {
+                badgeText = ` ⇥ TAB to remove code (line ${target.position.line + 1}) `;
+            } else if (target.reason.toLowerCase().includes('fix') || target.reason.toLowerCase().includes('syntax')) {
+                badgeText = ` ⇥ TAB to fix (line ${target.position.line + 1}) `;
+            } else {
+                badgeText = ` ⇥ TAB to line ${target.position.line + 1} `;
+            }
         }
     }
 
