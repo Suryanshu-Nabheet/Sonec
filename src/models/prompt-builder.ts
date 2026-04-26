@@ -43,7 +43,7 @@ export class PromptBuilder {
 
     // Diagnostics (Critical for auto-fixing errors)
     if (context.diagnostics && context.diagnostics.length > 0) {
-        sections.push(this.buildDiagnosticsSection(context.diagnostics));
+        sections.push(this.buildDiagnosticsSection(context));
     }
 
     // Symbols in scope
@@ -100,6 +100,10 @@ export class PromptBuilder {
 
     if (context.recentEdits.length > 0) {
       sections.push(this.buildRecentEditsSection(context));
+    }
+
+    if (context.diagnostics && context.diagnostics.length > 0) {
+      sections.push(this.buildDiagnosticsSection(context));
     }
 
     sections.push(this.buildCurrentFileSection(context));
@@ -287,10 +291,32 @@ Output format same as transformation plan.
     return sections.filter(Boolean).join('\n\n');
   }
 
-  private buildDiagnosticsSection(diagnostics: vscode.Diagnostic[]): string {
-    const errorList = diagnostics
-      .slice(0, 10)
-      .map((d) => `  - [L${d.range.start.line + 1}] ${d.message} (${this.severityName(d.severity)})`)
+  private buildDiagnosticsSection(context: ProjectContext): string {
+    const allDiagnostics: {file: string, diagnostic: vscode.Diagnostic}[] = [];
+    
+    // Current file diagnostics
+    if (context.diagnostics) {
+        context.diagnostics.forEach(d => allDiagnostics.push({
+            file: context.currentFile.file.relativePath,
+            diagnostic: d
+        }));
+    }
+    
+    // Related file diagnostics
+    context.relatedFiles.forEach(f => {
+        if (f.diagnostics) {
+            f.diagnostics.forEach(d => allDiagnostics.push({
+                file: f.relativePath,
+                diagnostic: d
+            }));
+        }
+    });
+
+    if (allDiagnostics.length === 0) return '';
+
+    const errorList = allDiagnostics
+      .slice(0, 15)
+      .map(({file, diagnostic: d}) => `  - ${file}:[L${d.range.start.line + 1}] ${d.message} (${this.severityName(d.severity)})`)
       .join('\n');
 
     return `<diagnostics>\n${errorList}\n</diagnostics>`;
