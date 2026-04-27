@@ -1,5 +1,5 @@
 /**
- * SONEC Advanced Setup Script
+ * AutoCode Advanced Setup Script
  * 
  * Handles project initialization, validation of environment variables,
  * and pre-run diagnostic tests for local models (Ollama).
@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 async function setup() {
-    console.log('--- SONEC Engine Initialization ---');
+    console.log('--- AutoCode Engine Initialization ---');
 
     try {
         // 1. Dependency Check
@@ -26,7 +26,7 @@ async function setup() {
         if (!fs.existsSync(envPath)) {
             console.log('Creating default .env from template...');
             // In a real scenario, we'd copy from a template
-            fs.writeFileSync(envPath, 'SONEC_LOG_LEVEL=info\n');
+            fs.writeFileSync(envPath, 'AutoCode_LOG_LEVEL=info\n');
         }
 
         // 4. Local Model Connectivity (Ollama)
@@ -40,7 +40,7 @@ async function setup() {
             console.warn('Warning: Ollama is not running. Local completions will not be available until started.');
         }
 
-        console.log('\nSONEC setup completed successfully.');
+        console.log('\nAutoCode setup completed successfully.');
     } catch (error) {
         console.error('Setup failed:', error);
         process.exit(1);

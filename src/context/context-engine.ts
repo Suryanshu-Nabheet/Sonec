@@ -1,5 +1,5 @@
 /**
- * SONEC Context Engine
+ * AutoCode Context Engine
  * 
  * The brain of the system. Builds deep, ranked context from:
  * - Current cursor position and file content
@@ -7,8 +7,6 @@
  * - Related files via imports / symbol graph
  * - Git diffs and recent edits
  * - Project-level style patterns
- * 
- * Outputs a compressed, ranked ProjectContext suitable for the model layer.
  */
 
 import * as vscode from 'vscode';
@@ -19,8 +17,6 @@ import {
   SymbolInfo,
   ImportInfo,
   EditEvent,
-  GitDiff,
-  ProjectStyle,
 } from '../core/types';
 import { ConfigManager } from '../core/config';
 import { Logger } from '../core/logger';
@@ -28,18 +24,12 @@ import { EventBus } from '../core/event-bus';
 import { SymbolAnalyzer } from './analyzers/symbol-analyzer';
 import { ImportAnalyzer } from './analyzers/import-analyzer';
 import { GitAnalyzer } from './analyzers/git-analyzer';
-import { TrajectoryEngine } from '../prediction/trajectory-engine';
-import { SemanticResolver } from './semantic-resolver';
 import { StyleAnalyzer } from '../style-learning/style-analyzer';
+import { SemanticResolver } from './semantic-resolver';
 import { ContextRanker } from './context-ranker';
 
-/** Number of preceding/following lines to include around cursor */
 const CURSOR_WINDOW_LINES = 60;
-
-/** Maximum related files to include in context */
 const MAX_RELATED_FILES = 8;
-
-/** Maximum symbols to include */
 const MAX_SYMBOLS = 100;
 
 /**
@@ -53,7 +43,6 @@ export class ContextEngine implements vscode.Disposable {
   private importAnalyzer: ImportAnalyzer;
   private gitAnalyzer: GitAnalyzer;
   private styleAnalyzer: StyleAnalyzer;
-  private trajectoryEngine: TrajectoryEngine;
   private semanticResolver: SemanticResolver;
   private contextRanker: ContextRanker;
   private editHistory: EditEvent[] = [];
@@ -68,7 +57,6 @@ export class ContextEngine implements vscode.Disposable {
     this.importAnalyzer = new ImportAnalyzer();
     this.gitAnalyzer = new GitAnalyzer();
     this.styleAnalyzer = new StyleAnalyzer();
-    this.trajectoryEngine = TrajectoryEngine.getInstance();
     this.semanticResolver = new SemanticResolver();
     this.contextRanker = new ContextRanker();
 
@@ -77,11 +65,6 @@ export class ContextEngine implements vscode.Disposable {
 
   /**
    * Build the full project context for a given position.
-   * This is the primary method called by the completion provider.
-   * @param document The current text document
-   * @param position The current cursor position
-   * @param token The cancellation token
-   * @returns A promise that resolves to the assembled project context
    */
   async buildContext(
     document: vscode.TextDocument,
@@ -91,46 +74,30 @@ export class ContextEngine implements vscode.Disposable {
     const timer = this.logger.time('ContextEngine.buildContext');
 
     try {
-      // Get basic context points
       const cursorContext = this.buildCursorContext(document, position);
       
-      const trajectory = this.trajectoryEngine.getTrajectoryContext();
-      
-      // Parallelize heavy I/O operations
-      const [openFiles, symbols, imports, gitDiffs, impacts] = await Promise.all([
+      const [openFiles, symbols, imports, gitDiffs] = await Promise.all([
         this.getOpenFileContexts(document.uri),
         this.symbolAnalyzer.getSymbols(document, token, MAX_SYMBOLS),
         this.importAnalyzer.analyzeImports(document),
-        this.gitAnalyzer.getRecentDiffs(),
-        this.getSymbolImpacts(document, position, token)
+        this.gitAnalyzer.getRecentDiffs()
       ]);
 
       if (token.isCancellationRequested) {
         throw new Error('Context building cancelled');
       }
 
-      // Parallelize secondary context passes
-      let resolvedSignatures: string[] = [];
       const lineText = document.lineAt(position.line).text.trim();
       const isComplex = lineText.includes('.') || lineText.startsWith('import') || lineText.includes('(');
       
-      const [relatedFiles, sigs] = await Promise.all([
+      const [relatedFiles, resolvedSignatures] = await Promise.all([
         this.findRelatedFiles(document, imports, symbols),
         isComplex ? this.semanticResolver.resolveImportSignatures(document, imports, token) : Promise.resolve([])
       ]);
-      resolvedSignatures = sigs;
-      
-      if (!isComplex) {
-        this.logger.debug('Skipping semantic resolution for simple line');
-      }
 
-      // Use a standard style snapshot in the hot-path
       const projectStyle = this.styleAnalyzer.getDefaultStyle();
-
-      // Get standard diagnostics for the current file
       const docDiagnostics = vscode.languages.getDiagnostics(document.uri);
 
-      // Rank and compress context to fit model's token budget
       const rankedContext: ProjectContext = {
         currentFile: cursorContext,
         openFiles,
@@ -140,8 +107,6 @@ export class ContextEngine implements vscode.Disposable {
         gitDiffs,
         recentEdits: this.getRecentEdits(),
         projectStyle,
-        trajectory,
-        impacts,
         resolvedSignatures,
         diagnostics: docDiagnostics,
       };
@@ -164,51 +129,11 @@ export class ContextEngine implements vscode.Disposable {
     } catch (err) {
       timer();
       this.logger.error('Failed to build context', err);
-      // Return minimal fallback context
       return this.buildFallbackContext(document, position);
     }
   }
 
-  /**
-   * Find where current symbol is referenced in other files to assess impact.
-   * @param document The current text document
-   * @param position The current cursor position
-   * @param token The cancellation token
-   * @returns A promise that resolves to an array of impact strings
-   */
-  private async getSymbolImpacts(
-    document: vscode.TextDocument,
-    position: vscode.Position,
-    token: vscode.CancellationToken
-  ): Promise<string[]> {
-    try {
-      const refs = await vscode.commands.executeCommand<vscode.Location[]>(
-        'vscode.executeReferenceProvider',
-        document.uri,
-        position
-      );
 
-      if (!refs || refs.length === 0) return [];
-
-      // Filter to find references in other files
-      const externalRefs = refs.filter(ref => ref.uri.fsPath !== document.uri.fsPath);
-      
-      // Limit to 3 most relevant impacts to avoid token bloat
-      return externalRefs.slice(0, 3).map(ref => {
-        const relPath = vscode.workspace.asRelativePath(ref.uri);
-        return `Referenced in ${relPath}:L${ref.range.start.line + 1}`;
-      });
-    } catch {
-      return [];
-    }
-  }
-
-  /**
-   * Build cursor-local context with surrounding code window.
-   * @param document The current text document
-   * @param position The current cursor position
-   * @returns The cursor context
-   */
   private buildCursorContext(
     document: vscode.TextDocument,
     position: vscode.Position
@@ -217,7 +142,6 @@ export class ContextEngine implements vscode.Disposable {
     const linePrefix = line.text.substring(0, position.character);
     const lineSuffix = line.text.substring(position.character);
 
-    // Extract surrounding lines
     const startLine = Math.max(0, position.line - CURSOR_WINDOW_LINES);
     const endLine = Math.min(
       document.lineCount - 1,
@@ -238,11 +162,9 @@ export class ContextEngine implements vscode.Disposable {
         ? document.getText(followingRange)
         : '';
 
-    // Detect indentation at cursor
     const indentMatch = line.text.match(/^(\s*)/);
     const indentation = indentMatch ? indentMatch[1] : '';
 
-    // Get selection if any
     const editor = vscode.window.activeTextEditor;
     const selectedText =
       editor && !editor.selection.isEmpty
@@ -263,11 +185,6 @@ export class ContextEngine implements vscode.Disposable {
     };
   }
 
-  /**
-   * Build a FileContext from a TextDocument.
-   * @param document The text document
-   * @returns The file context
-   */
   private buildFileContext(document: vscode.TextDocument): FileContext {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
     const relativePath = workspaceFolder
@@ -285,11 +202,6 @@ export class ContextEngine implements vscode.Disposable {
     };
   }
 
-  /**
-   * Get contexts for all open editor tabs (excluding current file).
-   * @param currentUri The current file's URI
-   * @returns A promise that resolves to an array of open file contexts
-   */
   private async getOpenFileContexts(
     currentUri: vscode.Uri
   ): Promise<FileContext[]> {
@@ -314,33 +226,20 @@ export class ContextEngine implements vscode.Disposable {
     return openFiles;
   }
 
-  /**
-   * Find files related to the current document through imports and symbols.
-   * @param document The current document
-   * @param imports The imports in the current document
-   * @param _symbols The symbols in the current document
-   * @returns A promise that resolves to an array of related file contexts
-   */
   private async findRelatedFiles(
     document: vscode.TextDocument,
     imports: ImportInfo[],
     _symbols: SymbolInfo[]
   ): Promise<FileContext[]> {
-    if (!this.config.getValue('multiFileEnabled')) {
-      return [];
-    }
-
     const relatedUris = new Set<string>();
     const relatedFiles: FileContext[] = [];
 
-    // Resolve import paths to actual files
     for (const imp of imports) {
       if (imp.resolvedPath) {
         relatedUris.add(imp.resolvedPath);
       }
     }
 
-    // Also find files that import this file
     const currentRelPath = vscode.workspace.asRelativePath(document.uri);
     const reverseImports = await this.importAnalyzer.findReverseImports(
       currentRelPath
@@ -349,7 +248,6 @@ export class ContextEngine implements vscode.Disposable {
       relatedUris.add(uri);
     }
 
-    // Load related files (limited to MAX_RELATED_FILES)
     let count = 0;
     for (const uriStr of relatedUris) {
       if (count >= MAX_RELATED_FILES) {break;}
@@ -366,9 +264,6 @@ export class ContextEngine implements vscode.Disposable {
     return relatedFiles;
   }
 
-  /**
-   * Track document edits for recent-edit context.
-   */
   private setupEditTracking(): void {
     this.disposables.push(
       vscode.workspace.onDidChangeTextDocument((e) => {
@@ -378,7 +273,7 @@ export class ContextEngine implements vscode.Disposable {
             timestamp: Date.now(),
             range: change.range,
             newText: change.text,
-            oldText: '', // We can't easily get old text from this event
+            oldText: '',
           };
           this.editHistory.push(edit);
           if (this.editHistory.length > this.MAX_EDIT_HISTORY) {
@@ -389,27 +284,17 @@ export class ContextEngine implements vscode.Disposable {
     );
   }
 
-  /**
-   * Get recent edits within the last 5 minutes.
-   * @returns An array of recent edits
-   */
   private getRecentEdits(): EditEvent[] {
     const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
     return this.editHistory.filter((e) => e.timestamp > fiveMinutesAgo);
   }
 
-  /**
-   * Minimal fallback context when full context building fails.
-   * @param document The text document
-   * @param position The cursor position
-   * @returns A promise that resolves to a minimal project context
-   */
   private async buildFallbackContext(
     document: vscode.TextDocument,
     position: vscode.Position
   ): Promise<ProjectContext> {
     return {
-      currentFile: await this.buildCursorContext(document, position),
+      currentFile: this.buildCursorContext(document, position),
       openFiles: [],
       relatedFiles: [],
       symbols: [],
@@ -420,9 +305,6 @@ export class ContextEngine implements vscode.Disposable {
     };
   }
 
-  /**
-   * Disposes the context engine resources.
-   */
   dispose(): void {
     this.disposables.forEach((d) => d.dispose());
   }

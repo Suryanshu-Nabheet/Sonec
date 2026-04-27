@@ -1,5 +1,5 @@
 /**
- * SONEC Project Graph
+ * AutoCode Project Graph
  * 
  * Maintains a directed graph of project dependencies and symbol relationships.
  * Supports:

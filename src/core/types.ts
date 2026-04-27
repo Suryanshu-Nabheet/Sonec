@@ -1,8 +1,7 @@
 /**
- * SONEC Core Type Definitions
+ * AutoCode Core Type Definitions
  * 
- * Central type system for the entire SONEC engine.
- * All modules reference these types to ensure consistency.
+ * Central type system for the entire AutoCode engine.
  */
 
 import * as vscode from 'vscode';
@@ -18,9 +17,9 @@ export type ModelProvider = 'openai' | 'anthropic' | 'ollama' | 'custom';
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 /**
- * Comprehensive configuration for the SONEC extension.
+ * Comprehensive configuration for the AutoCode extension.
  */
-export interface SonecConfig {
+export interface AutoCodeConfig {
   enabled: boolean;
   provider: ModelProvider;
   model: string;
@@ -29,7 +28,6 @@ export interface SonecConfig {
   maxContextTokens: number;
   debounceMs: number;
   prefetchEnabled: boolean;
-  multiFileEnabled: boolean;
   maxCompletionLines: number;
   streamingEnabled: boolean;
   cacheEnabled: boolean;
@@ -37,103 +35,6 @@ export interface SonecConfig {
   styleLearnEnabled: boolean;
   telemetryEnabled: boolean;
   logLevel: LogLevel;
-}
-
-/**
- * Types of structured edit operations.
- */
-export type ActionType = 'insert' | 'replace' | 'delete' | 'move' | 'create_file';
-
-/**
- * Base interface for all structured actions.
- */
-export interface BaseAction {
-  type: ActionType;
-  file: string;
-  confidence: number; // 0-1 score
-  description?: string;
-}
-
-/**
- * Represents an insertion of code at a specific position.
- */
-export interface InsertAction extends BaseAction {
-  type: 'insert';
-  position: {
-    line: number;
-    character: number;
-  };
-  code: string;
-}
-
-/**
- * Represents a replacement of a code range with new content.
- */
-export interface ReplaceAction extends BaseAction {
-  type: 'replace';
-  range: {
-    startLine: number;
-    startCharacter: number;
-    endLine: number;
-    endCharacter: number;
-  };
-  code: string;
-}
-
-/**
- * Represents a deletion of a code range.
- */
-export interface DeleteAction extends BaseAction {
-  type: 'delete';
-  range: {
-    startLine: number;
-    startCharacter: number;
-    endLine: number;
-    endCharacter: number;
-  };
-}
-
-/**
- * Represents moving a range of code to another location or file.
- */
-export interface MoveAction extends BaseAction {
-  type: 'move';
-  sourceRange: {
-    startLine: number;
-    endLine: number;
-  };
-  destinationFile: string;
-  destinationLine: number;
-}
-
-/**
- * Represents the creation of a new file with content.
- */
-export interface CreateFileAction extends BaseAction {
-  type: 'create_file';
-  code: string;
-  relativePath: string;
-}
-
-/**
- * Union type for all possible structured actions.
- */
-export type StructuredAction =
-  | InsertAction
-  | ReplaceAction
-  | DeleteAction
-  | MoveAction
-  | CreateFileAction;
-
-/**
- * A collection of actions to be executed together as a logical change.
- */
-export interface ActionPlan {
-  id: string;
-  timestamp: number;
-  actions: StructuredAction[];
-  reasoning?: string;
-  totalConfidence: number;
 }
 
 /**
@@ -146,7 +47,7 @@ export interface FileContext {
   content: string;
   version: number;
   lineCount: number;
-  diagnostics?: any[]; // Simplified to avoid circularity or complex mapping
+  diagnostics?: any[];
 }
 
 /**
@@ -155,12 +56,12 @@ export interface FileContext {
 export interface CursorContext {
   file: FileContext;
   position: vscode.Position;
-  linePrefix: string;     // text before cursor on current line
-  lineSuffix: string;     // text after cursor on current line
-  precedingLines: string; // N lines before cursor
-  followingLines: string; // N lines after cursor
+  linePrefix: string;
+  lineSuffix: string;
+  precedingLines: string;
+  followingLines: string;
   selectedText?: string;
-  indentation: string;    // detected indentation at cursor
+  indentation: string;
 }
 
 /**
@@ -202,7 +103,7 @@ export interface GitDiff {
 }
 
 /**
- * Full project context used as input for predictions.
+ * Full project context used as input for completions.
  */
 export interface ProjectContext {
   currentFile: CursorContext;
@@ -213,8 +114,6 @@ export interface ProjectContext {
   gitDiffs: GitDiff[];
   recentEdits: EditEvent[];
   projectStyle: ProjectStyle;
-  trajectory?: string;
-  impacts?: string[];
   resolvedSignatures?: string[];
   diagnostics?: any[];
 }
@@ -269,38 +168,13 @@ export interface CompletionResult {
   insertText: string;
   range: vscode.Range;
   confidence: number;
-  source: 'inline' | 'block' | 'transformation';
+  source: 'inline' | 'block';
   metadata: {
     modelLatencyMs: number;
     contextTokens: number;
     completionTokens: number;
     cached: boolean;
   };
-}
-
-/**
- * An edit that was predicted but not yet applied.
- */
-export interface PredictedEdit {
-  id: string;
-  file: string;
-  position: vscode.Position;
-  preview: string;
-  actions: StructuredAction[];
-  confidence: number;
-  category: 'completion' | 'refactor' | 'fix' | 'enhancement';
-  appliedAt?: number;
-}
-
-/**
- * A prediction of the next location where the user might want to edit.
- */
-export interface NextEditPrediction {
-  file: string;
-  position: vscode.Position;
-  reason: string;
-  confidence: number;
-  suggestedAction?: StructuredAction;
 }
 
 /**
@@ -384,41 +258,16 @@ export interface PerformanceMetrics {
 /**
  * Union type for all possible extension events.
  */
-export type SonecEvent =
+export type AutoCodeEvent =
   | { type: 'completion_triggered'; data: { file: string; position: vscode.Position } }
   | { type: 'completion_shown'; data: { id: string; confidence: number } }
   | { type: 'completion_accepted'; data: { id: string; partial: boolean } }
   | { type: 'completion_dismissed'; data: { id: string; reason: string; text?: string; file?: string; line?: number } }
-  | { type: 'action_applied'; data: { actionPlanId: string; success: boolean } }
-  | { type: 'next_edit_jumped'; data: { file: string; position: vscode.Position } }
   | { type: 'context_rebuilt'; data: { tokenCount: number; latencyMs: number } }
   | { type: 'cache_hit'; data: { key: string } }
-  | { type: 'next_edits_updated'; data: { predictions: NextEditPrediction[] } }
   | { type: 'error'; data: { message: string; stack?: string } };
 
 /**
  * Handler function for extension events.
  */
-export type SonecEventHandler = (event: SonecEvent) => void;
-
-/**
- * Represents a historical entry that can be used for undo operations.
- */
-export interface UndoEntry {
-  id: string;
-  timestamp: number;
-  actionPlanId: string;
-  reverseActions: StructuredAction[];
-  description: string;
-}
-
-/**
- * Represents a group of actions being applied as a single transaction.
- */
-export interface EditTransaction {
-  id: string;
-  actions: StructuredAction[];
-  status: 'pending' | 'applying' | 'applied' | 'rolled_back' | 'failed';
-  undoEntry?: UndoEntry;
-  error?: string;
-}
+export type AutoCodeEventHandler = (event: AutoCodeEvent) => void;

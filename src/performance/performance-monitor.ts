@@ -1,5 +1,5 @@
 /**
- * SONEC Performance Monitor
+ * AutoCode Performance Monitor
  * 
  * Tracks and reports latency, throughput, and quality metrics.
  * Provides real-time performance dashboards in the status bar
@@ -33,7 +33,7 @@ export class PerformanceMonitor implements vscode.Disposable {
       vscode.StatusBarAlignment.Right,
       100
     );
-    this.statusBarItem.command = 'sonec.showPredictedEdits';
+    this.statusBarItem.command = 'autocode.openSettings';
     this.updateStatusBar();
     this.statusBarItem.show();
 
@@ -121,9 +121,9 @@ export class PerformanceMonitor implements vscode.Disposable {
     const avgLatency = Math.round(metrics.averageLatencyMs);
     const acceptRate = Math.round(metrics.acceptanceRate * 100);
 
-    this.statusBarItem.text = `SONEC ${avgLatency}ms`;
+    this.statusBarItem.text = `AutoCode ${avgLatency}ms`;
     this.statusBarItem.tooltip = [
-      `SONEC Engine Status`,
+      `AutoCode Engine Status`,
       `------------------`,
       `Avg Latency: ${avgLatency}ms`,
       `P95 Latency: ${Math.round(metrics.p95LatencyMs)}ms`,

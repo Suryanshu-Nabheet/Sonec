@@ -1,19 +1,19 @@
 /**
- * SONEC Event Bus
+ * AutoCode Event Bus
  * 
  * Central event system for decoupled inter-module communication.
  * All engine events flow through this bus for observability and coordination.
  */
 
 import * as vscode from 'vscode';
-import { SonecEvent, SonecEventHandler } from './types';
+import { AutoCodeEvent, AutoCodeEventHandler } from './types';
 import { Logger } from './logger';
 
 export class EventBus implements vscode.Disposable {
   private static instance: EventBus;
-  private handlers: Map<string, Set<SonecEventHandler>> = new Map();
-  private globalHandlers: Set<SonecEventHandler> = new Set();
-  private eventHistory: SonecEvent[] = [];
+  private handlers: Map<string, Set<AutoCodeEventHandler>> = new Map();
+  private globalHandlers: Set<AutoCodeEventHandler> = new Set();
+  private eventHistory: AutoCodeEvent[] = [];
   private readonly MAX_HISTORY = 200;
   private logger: Logger;
 
@@ -29,7 +29,7 @@ export class EventBus implements vscode.Disposable {
   }
 
   /** Emit an event to all registered handlers */
-  emit(event: SonecEvent): void {
+  emit(event: AutoCodeEvent): void {
     this.logger.debug(`Event: ${event.type}`, event.data);
 
     // Store in history ring buffer
@@ -61,7 +61,7 @@ export class EventBus implements vscode.Disposable {
   }
 
   /** Subscribe to a specific event type */
-  on(eventType: SonecEvent['type'], handler: SonecEventHandler): vscode.Disposable {
+  on(eventType: AutoCodeEvent['type'], handler: AutoCodeEventHandler): vscode.Disposable {
     if (!this.handlers.has(eventType)) {
       this.handlers.set(eventType, new Set());
     }
@@ -73,7 +73,7 @@ export class EventBus implements vscode.Disposable {
   }
 
   /** Subscribe to all events */
-  onAll(handler: SonecEventHandler): vscode.Disposable {
+  onAll(handler: AutoCodeEventHandler): vscode.Disposable {
     this.globalHandlers.add(handler);
     return new vscode.Disposable(() => {
       this.globalHandlers.delete(handler);
@@ -81,7 +81,7 @@ export class EventBus implements vscode.Disposable {
   }
 
   /** Get recent event history for a specific type */
-  getHistory(type?: SonecEvent['type'], limit: number = 50): SonecEvent[] {
+  getHistory(type?: AutoCodeEvent['type'], limit: number = 50): AutoCodeEvent[] {
     let events = this.eventHistory;
     if (type) {
       events = events.filter((e) => e.type === type);

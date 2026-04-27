@@ -1,5 +1,5 @@
 /**
- * SONEC Import Analyzer
+ * AutoCode Import Analyzer
  * 
  * Parses import/require statements across multiple languages to build
  * dependency graphs and find cross-file relationships.

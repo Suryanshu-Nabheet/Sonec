@@ -1,5 +1,5 @@
 /**
- * SONEC Performance Utilities
+ * AutoCode Performance Utilities
  * 
  * Provides high-resolution timing and resource usage tracking.
  */

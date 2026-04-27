@@ -1,5 +1,5 @@
 /**
- * SONEC Utility Functions
+ * AutoCode Utility Functions
  * 
  * Shared utility functions used across multiple modules.
  */

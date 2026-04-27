@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# SONEC Production Bundling Script
+# AutoCode Production Bundling Script
 # Prepares the extension for marketplace distribution
 
 set -e

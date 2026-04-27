@@ -1,5 +1,5 @@
 /**
- * SONEC Settings Panel
+ * AutoCode Settings Panel
  * 
  * Minimal, professional webview settings for:
  * - Provider & API key configuration
@@ -13,7 +13,7 @@ import { Logger } from '../core/logger';
 
 export class SettingsPanel implements vscode.Disposable {
   public static currentPanel: SettingsPanel | undefined;
-  private static readonly viewType = 'sonec.settings';
+  private static readonly viewType = 'autocode.settings';
 
   private readonly panel: vscode.WebviewPanel;
   private readonly config: ConfigManager;
@@ -60,7 +60,7 @@ export class SettingsPanel implements vscode.Disposable {
 
     const panel = vscode.window.createWebviewPanel(
       SettingsPanel.viewType,
-      'SONEC Settings',
+      'AutoCode Settings',
       column || vscode.ViewColumn.One,
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] }
     );
@@ -98,7 +98,7 @@ export class SettingsPanel implements vscode.Disposable {
   private async saveConfig(key: string, value: any): Promise<void> {
     try {
       await vscode.workspace
-        .getConfiguration('sonec')
+        .getConfiguration('autocode')
         .update(key, value, vscode.ConfigurationTarget.Global);
 
       this.panel.webview.postMessage({
@@ -123,12 +123,12 @@ export class SettingsPanel implements vscode.Disposable {
   private async saveApiKey(provider: string, apiKey: string): Promise<void> {
     try {
       await vscode.workspace
-        .getConfiguration('sonec')
+        .getConfiguration('autocode')
         .update('apiKey', apiKey, vscode.ConfigurationTarget.Global);
 
       if (provider) {
         await vscode.workspace
-          .getConfiguration('sonec')
+          .getConfiguration('autocode')
           .update('provider', provider, vscode.ConfigurationTarget.Global);
       }
 
@@ -250,7 +250,7 @@ export class SettingsPanel implements vscode.Disposable {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
-  <title>SONEC Settings</title>
+  <title>AutoCode Settings</title>
   <style nonce="${nonce}">
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -529,7 +529,7 @@ export class SettingsPanel implements vscode.Disposable {
 </head>
 <body>
   <div class="header">
-    <h1>SONEC Settings</h1>
+    <h1>AutoCode Settings</h1>
     <p>Structured Omniscient Neural Editor & Compiler</p>
     <div class="badge warn" id="badge"><span id="badgeText">Checking...</span></div>
   </div>

@@ -1,5 +1,5 @@
 /**
- * SONEC Semantic Resolver
+ * AutoCode Semantic Resolver
  * 
  * Performs cross-file AST resolution to find real signatures of imported symbols.
  * This turns "static context" into "deep architectural context".

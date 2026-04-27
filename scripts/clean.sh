@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# SONEC Clean Script
+# AutoCode Clean Script
 # Removes build artifacts and cached files
 
 set -e

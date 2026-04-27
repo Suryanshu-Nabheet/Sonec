@@ -1,5 +1,5 @@
 /**
- * SONEC Git Analyzer
+ * AutoCode Git Analyzer
  * 
  * Extracts recent git diffs and change history to provide
  * temporal context about what the developer has been working on.

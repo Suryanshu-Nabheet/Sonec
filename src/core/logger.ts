@@ -1,5 +1,5 @@
 /**
- * SONEC Logger
+ * AutoCode Logger
  * 
  * Structured logging with level filtering, output channel integration,
  * and performance-safe formatting.
@@ -21,7 +21,7 @@ export class Logger implements vscode.Disposable {
   private level: LogLevel = 'info';
 
   private constructor() {
-    this.outputChannel = vscode.window.createOutputChannel('SONEC Engine');
+    this.outputChannel = vscode.window.createOutputChannel('AutoCode Engine');
   }
 
   static getInstance(): Logger {

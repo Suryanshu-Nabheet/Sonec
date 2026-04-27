@@ -1,5 +1,5 @@
 /**
- * SONEC Context Ranker
+ * AutoCode Context Ranker
  * 
  * Ranks and compresses context to fit within the model's token budget.
  * Uses a priority-based system to determine what context is most relevant.

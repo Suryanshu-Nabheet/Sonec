@@ -1,5 +1,5 @@
 /**
- * SONEC Symbol Analyzer
+ * AutoCode Symbol Analyzer
  * 
  * Extracts symbol information (functions, classes, variables, types)
  * from the current document and workspace using VS Code's built-in

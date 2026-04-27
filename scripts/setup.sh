@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# SONEC Setup Script
+# AutoCode Setup Script
 # Performs initial environment checks and installs dependencies
 
 set -e
 
 echo "------------------------------------------------"
-echo "Initializing SONEC Development Environment"
+echo "Initializing AutoCode Development Environment"
 echo "------------------------------------------------"
 
 # 1. Check for Node.js

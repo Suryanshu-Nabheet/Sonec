@@ -1,5 +1,5 @@
 /**
- * SONEC Embedding Manager
+ * AutoCode Embedding Manager
  * 
  * Manages vector embeddings for local project symbols and files.
  * Enables semantic similarity search across the codebase.

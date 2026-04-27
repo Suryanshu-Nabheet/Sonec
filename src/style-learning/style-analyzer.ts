@@ -1,5 +1,5 @@
 /**
- * SONEC Style Analyzer
+ * AutoCode Style Analyzer
  * 
  * Learns and detects project-specific coding style patterns including:
  * - Indentation (tabs vs spaces, indent size)

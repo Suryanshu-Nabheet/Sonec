@@ -1,5 +1,5 @@
 /**
- * SONEC Model Layer
+ * AutoCode Model Layer
  * 
  * Abstraction layer supporting multiple AI providers with unified API.
  * Handles prompt construction, streaming, rate limiting, and response parsing.

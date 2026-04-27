@@ -1,16 +1,16 @@
 /**
- * SONEC Configuration Manager
+ * AutoCode Configuration Manager
  * 
  * Centralized configuration management with real-time change detection
  * and validation. All modules read configuration through this singleton.
  */
 
 import * as vscode from 'vscode';
-import { SonecConfig, ModelProvider, LogLevel } from './types';
+import { AutoCodeConfig, ModelProvider, LogLevel } from './types';
 
-const CONFIG_SECTION = 'sonec';
+const CONFIG_SECTION = 'autocode';
 
-const DEFAULT_CONFIG: SonecConfig = {
+const DEFAULT_CONFIG: AutoCodeConfig = {
   enabled: true,
   provider: 'ollama',
   model: 'qwen2.5-coder:1.5b',
@@ -19,7 +19,6 @@ const DEFAULT_CONFIG: SonecConfig = {
   maxContextTokens: 8192,
   debounceMs: 0,
   prefetchEnabled: true,
-  multiFileEnabled: true,
   maxCompletionLines: 50,
   streamingEnabled: true,
   cacheEnabled: true,
@@ -31,9 +30,9 @@ const DEFAULT_CONFIG: SonecConfig = {
 
 export class ConfigManager implements vscode.Disposable {
   private static instance: ConfigManager;
-  private config: SonecConfig;
+  private config: AutoCodeConfig;
   private disposables: vscode.Disposable[] = [];
-  private changeEmitter = new vscode.EventEmitter<Partial<SonecConfig>>();
+  private changeEmitter = new vscode.EventEmitter<Partial<AutoCodeConfig>>();
 
   /** Fired when any configuration value changes */
   public readonly onConfigChange = this.changeEmitter.event;
@@ -64,12 +63,12 @@ export class ConfigManager implements vscode.Disposable {
   }
 
   /** Get a snapshot of the current config */
-  get(): SonecConfig {
+  get(): AutoCodeConfig {
     return { ...this.config };
   }
 
   /** Get a single config value */
-  getValue<K extends keyof SonecConfig>(key: K): SonecConfig[K] {
+  getValue<K extends keyof AutoCodeConfig>(key: K): AutoCodeConfig[K] {
     return this.config[key];
   }
 
@@ -106,7 +105,7 @@ export class ConfigManager implements vscode.Disposable {
     }
   }
 
-  private loadConfig(): SonecConfig {
+  private loadConfig(): AutoCodeConfig {
     const wsConfig = vscode.workspace.getConfiguration(CONFIG_SECTION);
     return {
       enabled: wsConfig.get<boolean>('enabled', DEFAULT_CONFIG.enabled),
@@ -117,7 +116,6 @@ export class ConfigManager implements vscode.Disposable {
       maxContextTokens: wsConfig.get<number>('maxContextTokens', DEFAULT_CONFIG.maxContextTokens),
       debounceMs: wsConfig.get<number>('debounceMs', DEFAULT_CONFIG.debounceMs),
       prefetchEnabled: wsConfig.get<boolean>('prefetchEnabled', DEFAULT_CONFIG.prefetchEnabled),
-      multiFileEnabled: wsConfig.get<boolean>('multiFileEnabled', DEFAULT_CONFIG.multiFileEnabled),
       maxCompletionLines: wsConfig.get<number>('maxCompletionLines', DEFAULT_CONFIG.maxCompletionLines),
       streamingEnabled: wsConfig.get<boolean>('streamingEnabled', DEFAULT_CONFIG.streamingEnabled),
       cacheEnabled: wsConfig.get<boolean>('cacheEnabled', DEFAULT_CONFIG.cacheEnabled),
@@ -129,11 +127,11 @@ export class ConfigManager implements vscode.Disposable {
   }
 
   private diffConfig(
-    oldConfig: SonecConfig,
-    newConfig: SonecConfig
-  ): Partial<SonecConfig> {
-    const changed: Partial<SonecConfig> = {};
-    for (const key of Object.keys(newConfig) as (keyof SonecConfig)[]) {
+    oldConfig: AutoCodeConfig,
+    newConfig: AutoCodeConfig
+  ): Partial<AutoCodeConfig> {
+    const changed: Partial<AutoCodeConfig> = {};
+    for (const key of Object.keys(newConfig) as (keyof AutoCodeConfig)[]) {
       if (oldConfig[key] !== newConfig[key]) {
         (changed as any)[key] = newConfig[key];
       }

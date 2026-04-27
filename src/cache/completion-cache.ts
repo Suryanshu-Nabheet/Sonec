@@ -1,5 +1,5 @@
 /**
- * SONEC Completion Cache
+ * AutoCode Completion Cache
  * 
  * LRU-based cache for completion results with TTL expiration.
  * Provides sub-millisecond lookups for repeated completion patterns.
