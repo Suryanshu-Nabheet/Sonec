@@ -281,12 +281,16 @@ function setupDocumentListeners(
       const config = ConfigManager.getInstance();
       if (!config.getValue('enabled')) {return;}
 
-      // 1. Proactive Code Completion Trigger
+      // 1. Proactive Code Completion Trigger (only when no jump predictions active)
       const debounceMs = config.getValue('debounceMs');
       selectionTimer = setTimeout(() => {
         const editor = vscode.window.activeTextEditor;
         if (editor && editor.document === event.textEditor.document && editor.selection.isEmpty) {
-          vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
+          // Don't trigger normal completions when jump predictions exist
+          const activePredictions = _predictionEngine.getNextEditPredictions();
+          if (activePredictions.length === 0) {
+            vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
+          }
         }
       }, debounceMs);
 

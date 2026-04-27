@@ -142,46 +142,53 @@ export class SonecCompletionProvider
         let replaceRange = new vscode.Range(position, position);
 
         if (action.type === 'delete') {
-          // Delete: replace the entire line content with nothing
           replaceRange = new vscode.Range(
             new vscode.Position(position.line, 0),
             lineEnd
           );
           insertText = '';
         } else if (action.type === 'replace' && 'code' in action) {
-          // Replace: swap the entire line with the fixed code
           replaceRange = new vscode.Range(
             new vscode.Position(position.line, 0),
             lineEnd
           );
-          // Ensure the replacement preserves indentation from the suggested code
           insertText = (action as any).code || '';
         } else if (action.type === 'insert' && 'code' in action) {
-          // Insert: add new code at cursor position
           replaceRange = new vscode.Range(position, position);
           insertText = (action as any).code || '';
         }
 
-        // Only inject if there's actually something to do
         if (insertText !== lineText || action.type === 'delete') {
-          const result: CompletionResult = {
-            id: `pred-${Date.now()}`,
-            text: insertText,
-            insertText: insertText,
-            range: replaceRange,
-            confidence: matchingPrediction.confidence,
-            source: 'block',
-            metadata: { modelLatencyMs: 0, contextTokens: 0, completionTokens: 0, cached: true }
-          };
           this.logger.debug(`Injecting predicted ${action.type} as instant completion`);
 
           const item = new vscode.InlineCompletionItem(insertText, replaceRange);
           item.command = {
             title: 'Post-Acceptance Hook',
             command: 'sonec.onCompletionAccepted',
-            arguments: [result]
+            arguments: [{
+              id: `pred-${Date.now()}`,
+              text: insertText,
+              insertText: insertText,
+              range: replaceRange,
+              confidence: matchingPrediction.confidence,
+              source: 'block',
+              metadata: { modelLatencyMs: 0, contextTokens: 0, completionTokens: 0, cached: true }
+            }]
           };
           return [item];
+        }
+      }
+
+      // ── CRITICAL GATE ──
+      // When jump predictions exist but we're NOT on the target line,
+      // suppress normal completions so TAB is reserved for jumping.
+      if (predictions.length > 0) {
+        const isOnAnyTarget = predictions.some(p =>
+          this.isFileMatch(document.uri, p.file) && p.position.line === position.line
+        );
+        if (!isOnAnyTarget) {
+          // Don't generate normal completions — let TAB trigger jump instead
+          return null;
         }
       }
 

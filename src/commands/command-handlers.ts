@@ -220,14 +220,15 @@ export class CommandHandlers implements vscode.Disposable {
     await this.navigateToEdit(target.file, target.position);
 
     // Trigger inline suggestion for preview (insert/replace/delete)
-    // The CompletionProvider will handle showing the ghost text or removal preview.
     setTimeout(() => {
         vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
-    }, 50);
+    }, 100);
 
-    // Proactively generate the AFTER-next predictions
-    this.generateNextEditPredictions();
-    
+    // Generate next predictions AFTER user has had time to accept/reject this one
+    setTimeout(() => {
+        this.generateNextEditPredictions();
+    }, 5000);
+
     this.eventBus.emit({
       type: 'next_edit_jumped',
       data: target
@@ -327,11 +328,6 @@ export class CommandHandlers implements vscode.Disposable {
         new vscode.Range(targetPosition, targetPosition),
         vscode.TextEditorRevealType.InCenterIfOutsideViewport
       );
-
-      // Trigger inline suggestion immediately
-      setTimeout(() => {
-          vscode.commands.executeCommand('editor.action.inlineSuggest.trigger');
-      }, 50);
     } catch (err) {
       this.logger.error(`Failed to navigate to ${filePath}`, err);
     }
