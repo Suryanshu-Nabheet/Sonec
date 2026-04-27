@@ -4,46 +4,33 @@ import { NextEditPrediction } from '../core/types';
 
 /**
  * Manages the visual indicators for predicted next edits.
- * Dual-layer UI:
- * 1. SOURCE: Dynamic badge at current cursor showing jump target.
- * 2. TARGET: Subtle marker in destination file overview ruler and ghost text preview.
+ * Shows a subtle inline badge at the cursor line (e.g. "⇥ TAB to fix line 42")
+ * and an overview ruler marker at the target.
  */
 export class JumpIndicatorManager implements vscode.Disposable {
   private readonly logger = Logger.getInstance();
-  
-  // Decorations for the TARGET location
-  private readonly targetHighlightType: vscode.TextEditorDecorationType;
-  private readonly targetPreviewType: vscode.TextEditorDecorationType;
-  
-  // Decorations for the SOURCE (current cursor) location
+
+  // Overview ruler marker at the TARGET location
+  private readonly targetRulerType: vscode.TextEditorDecorationType;
+
+  // Badge at the SOURCE (current cursor) location
   private readonly sourceBadgeType: vscode.TextEditorDecorationType;
-  
+
   private activeTarget: NextEditPrediction | null = null;
   private isDisposed = false;
 
   constructor() {
-    // 1. Highlight the target in the overview ruler only (minimal distraction)
-    this.targetHighlightType = vscode.window.createTextEditorDecorationType({
-      overviewRulerColor: new vscode.ThemeColor('editor.wordHighlightBackground'),
+    this.targetRulerType = vscode.window.createTextEditorDecorationType({
+      overviewRulerColor: new vscode.ThemeColor('editorInfo.foreground'),
       overviewRulerLane: vscode.OverviewRulerLane.Right,
     });
 
-    // 2. Faint ghost text preview at the target destination
-    this.targetPreviewType = vscode.window.createTextEditorDecorationType({
-      after: {
-        color: new vscode.ThemeColor('editorGhostText.foreground'),
-        fontStyle: 'italic',
-        margin: '0 0 0 1em',
-      }
-    });
-
-    // 3. The "TAB to jump" badge at the ACTIVE cursor position
     this.sourceBadgeType = vscode.window.createTextEditorDecorationType({
       after: {
         color: new vscode.ThemeColor('descriptionForeground'),
         backgroundColor: new vscode.ThemeColor('badge.background'),
         margin: '0 0 0 2em',
-        border: '1px solid #444',
+        border: '1px solid #555',
         fontWeight: 'bold',
       }
     });
@@ -54,117 +41,129 @@ export class JumpIndicatorManager implements vscode.Disposable {
    */
   public updateIndicator(predictions: NextEditPrediction[] | NextEditPrediction | null): void {
     if (this.isDisposed) return;
-    
+
     this.clearIndicators();
-    
+
     if (!predictions || (Array.isArray(predictions) && predictions.length === 0)) {
-        this.activeTarget = null;
-        return;
+      this.activeTarget = null;
+      return;
     }
 
-    const allPredictions = Array.isArray(predictions) ? predictions : [predictions];
-    const sorted = [...allPredictions].sort((a, b) => b.confidence - a.confidence);
+    const all = Array.isArray(predictions) ? predictions : [predictions];
+    const sorted = [...all].sort((a, b) => b.confidence - a.confidence);
     this.activeTarget = sorted[0];
 
-    const activeEditor = vscode.window.activeTextEditor;
-    if (!activeEditor) return;
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) return;
 
-    this.renderSourceBadge(activeEditor, this.activeTarget);
-    this.renderTargetHighlights(sorted);
+    // Don't show badge when cursor is already at the target (let ghost text take over)
+    const cursorLine = editor.selection.active.line;
+    const targetLine = this.activeTarget.position.line;
+    const isSameFile = this.isFileMatch(editor.document.uri, this.activeTarget.file);
+
+    if (isSameFile && cursorLine === targetLine) {
+      // At destination — no badge needed, ghost text handles it
+      return;
+    }
+
+    this.renderSourceBadge(editor, this.activeTarget);
+    this.renderTargetRuler(sorted);
   }
 
   /**
-   * Render the "TAB to jump" badge in the active editor at the current cursor line.
+   * Render the "TAB to ..." badge at the current cursor line.
    */
   private renderSourceBadge(editor: vscode.TextEditor, target: NextEditPrediction): void {
-    const currentLine = editor.selection.active.line;
-    const currentLineRange = editor.document.lineAt(currentLine).range;
+    const cursorLine = editor.selection.active.line;
+    const lineRange = editor.document.lineAt(cursorLine).range;
 
-    // Determine dynamic badge text based on relative destination
-    let badgeText = '';
-    const targetFileName = target.file.split(/[/\\]/).pop() || target.file;
-    const isDifferentFile = !editor.document.uri.fsPath.toLowerCase().endsWith(target.file.toLowerCase().replace(/\\/g, '/').split('/').pop() || '');
-    
-    if (isDifferentFile) {
-        badgeText = ` ⇥ TAB to ${targetFileName} `;
-    } else {
-        const lineDiff = target.position.line - currentLine;
-        if (lineDiff === 0) {
-            return;
-        } else {
-            const actionType = target.suggestedAction?.type || 'insert';
-            if (actionType === 'delete') {
-                badgeText = ` ⇥ TAB to remove code (line ${target.position.line + 1}) `;
-            } else if (target.reason.toLowerCase().includes('fix') || target.reason.toLowerCase().includes('syntax')) {
-                badgeText = ` ⇥ TAB to fix (line ${target.position.line + 1}) `;
-            } else {
-                badgeText = ` ⇥ TAB to line ${target.position.line + 1} `;
-            }
-        }
-    }
+    const badgeText = this.buildBadgeText(editor, target);
+    if (!badgeText) return;
+
+    const highConf = target.confidence > 0.7;
 
     const decoration: vscode.DecorationOptions = {
-        range: currentLineRange,
-        hoverMessage: new vscode.MarkdownString(`### Next Edit Prediction\n\n**Reason:** ${target.reason}\n\n**Confidence:** ${(target.confidence * 100).toFixed(0)}%`),
-        renderOptions: {
-            after: {
-                contentText: badgeText,
-                color: target.confidence > 0.8 ? new vscode.ThemeColor('button.foreground') : new vscode.ThemeColor('descriptionForeground'),
-                backgroundColor: target.confidence > 0.8 ? new vscode.ThemeColor('button.background') : new vscode.ThemeColor('badge.background'),
-                border: '1px solid #555',
-            }
+      range: lineRange,
+      hoverMessage: new vscode.MarkdownString(
+        `### Next Edit\n\n**${target.reason}**\n\nConfidence: ${(target.confidence * 100).toFixed(0)}%`
+      ),
+      renderOptions: {
+        after: {
+          contentText: badgeText,
+          color: highConf
+            ? new vscode.ThemeColor('button.foreground')
+            : new vscode.ThemeColor('descriptionForeground'),
+          backgroundColor: highConf
+            ? new vscode.ThemeColor('button.background')
+            : new vscode.ThemeColor('badge.background'),
+          border: '1px solid #555',
         }
+      }
     };
-    
+
     editor.setDecorations(this.sourceBadgeType, [decoration]);
   }
 
   /**
-   * Render highlights and previews in all visible editors where targets are located.
+   * Build the badge text based on the action type and target location.
    */
-  private renderTargetHighlights(predictions: NextEditPrediction[]): void {
-    const visibleEditors = vscode.window.visibleTextEditors;
-    if (visibleEditors.length === 0) return;
+  private buildBadgeText(editor: vscode.TextEditor, target: NextEditPrediction): string {
+    const fileName = target.file.split(/[/\\]/).pop() || target.file;
+    const isDifferentFile = !this.isFileMatch(editor.document.uri, target.file);
 
-    for (const target of predictions) {
-        const isPrimary = target === this.activeTarget;
-        const targetUri = this.resolveUri(target.file);
-        if (!targetUri) continue;
-
-        for (const editor of visibleEditors) {
-            if (editor.document.uri.fsPath === targetUri.fsPath) {
-                const line = Math.min(target.position.line, editor.document.lineCount - 1);
-                const lineRange = editor.document.lineAt(line).range;
-                
-                // Overview ruler marker
-                editor.setDecorations(this.targetHighlightType, [lineRange]);
-
-                // Ghost text preview for the primary target
-                if (isPrimary && target.suggestedAction && 'code' in target.suggestedAction && target.suggestedAction.code) {
-                    const previewText = target.suggestedAction.code.split('\n')[0].trim();
-                    if (previewText) {
-                        editor.setDecorations(this.targetPreviewType, [{
-                            range: lineRange,
-                            renderOptions: {
-                                after: { contentText: `  // Suggested: ${previewText}${target.suggestedAction.code.includes('\n') ? ' ...' : ''}` }
-                            }
-                        }]);
-                    }
-                }
-            }
-        }
+    if (isDifferentFile) {
+      return ` ⇥ TAB to ${fileName} `;
     }
+
+    const actionType = target.suggestedAction?.type;
+    const lineNum = target.position.line + 1;
+
+    if (actionType === 'delete') {
+      return ` ⇥ TAB to remove (line ${lineNum}) `;
+    }
+    if (actionType === 'replace') {
+      return ` ⇥ TAB to fix (line ${lineNum}) `;
+    }
+
+    // Default: generic jump
+    return ` ⇥ TAB to line ${lineNum} `;
+  }
+
+  /**
+   * Mark the target lines in the overview ruler.
+   */
+  private renderTargetRuler(predictions: NextEditPrediction[]): void {
+    for (const target of predictions) {
+      const targetUri = this.resolveUri(target.file);
+      if (!targetUri) continue;
+
+      for (const editor of vscode.window.visibleTextEditors) {
+        if (editor.document.uri.fsPath === targetUri.fsPath) {
+          const line = Math.min(target.position.line, editor.document.lineCount - 1);
+          editor.setDecorations(this.targetRulerType, [editor.document.lineAt(line).range]);
+        }
+      }
+    }
+  }
+
+  /**
+   * Check if a document URI matches a prediction file path.
+   */
+  private isFileMatch(docUri: vscode.Uri, predFile: string): boolean {
+    const docName = docUri.fsPath.toLowerCase().replace(/\\/g, '/').split('/').pop() || '';
+    const predName = predFile.toLowerCase().replace(/\\/g, '/').split('/').pop() || '';
+    return docName === predName;
   }
 
   private resolveUri(filePath: string): vscode.Uri | null {
     try {
-        if (vscode.Uri.parse(filePath).scheme === 'file' || filePath.startsWith('/') || /^[a-zA-Z]:/.test(filePath)) {
-            return vscode.Uri.file(filePath);
-        }
-        const wsFolder = vscode.workspace.workspaceFolders?.[0];
-        return wsFolder ? vscode.Uri.joinPath(wsFolder.uri, filePath) : vscode.Uri.file(filePath);
+      if (filePath.startsWith('/') || /^[a-zA-Z]:/.test(filePath)) {
+        return vscode.Uri.file(filePath);
+      }
+      const ws = vscode.workspace.workspaceFolders?.[0];
+      return ws ? vscode.Uri.joinPath(ws.uri, filePath) : vscode.Uri.file(filePath);
     } catch {
-        return null;
+      return null;
     }
   }
 
@@ -178,9 +177,8 @@ export class JumpIndicatorManager implements vscode.Disposable {
 
   public clearIndicators(): void {
     for (const editor of vscode.window.visibleTextEditors) {
-        editor.setDecorations(this.targetHighlightType, []);
-        editor.setDecorations(this.targetPreviewType, []);
-        editor.setDecorations(this.sourceBadgeType, []);
+      editor.setDecorations(this.targetRulerType, []);
+      editor.setDecorations(this.sourceBadgeType, []);
     }
   }
 
@@ -188,11 +186,7 @@ export class JumpIndicatorManager implements vscode.Disposable {
     if (this.isDisposed) return;
     this.isDisposed = true;
     this.clearIndicators();
-    this.targetHighlightType.dispose();
-    this.targetPreviewType.dispose();
+    this.targetRulerType.dispose();
     this.sourceBadgeType.dispose();
   }
 }
-
-
-

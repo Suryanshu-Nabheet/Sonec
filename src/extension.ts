@@ -290,7 +290,7 @@ function setupDocumentListeners(
         }
       }, debounceMs);
 
-      // 2. Background Trajectory Update (Much slower, non-blocking)
+      // 2. Background Trajectory Update (debounced to prevent spam)
       pathingTimer = setTimeout(async () => {
           const editor = vscode.window.activeTextEditor;
           if (editor && editor.document === event.textEditor.document && editor.selection.isEmpty) {
@@ -304,7 +304,7 @@ function setupDocumentListeners(
                   // Silent
               }
           }
-      }, 50); // Instantly update trajectory
+      }, 2000);
     })
   );
 }

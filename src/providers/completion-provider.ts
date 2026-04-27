@@ -124,36 +124,65 @@ export class SonecCompletionProvider
         },
       });
 
-      // 1. Speculative latency reduction: Check for jump-target matches
-      // Use both current predictions AND the last jump target (sticky) to avoid race conditions
+      // 1. Zero-latency injection: Check for jump-target matches
       const predictions = this.predictionEngine.getNextEditPredictions();
       const lastTarget = this.predictionEngine.getLastJumpTarget();
-      
       const allCandidates = lastTarget ? [...predictions, lastTarget] : predictions;
 
-      const matchingPrediction = allCandidates.find(p => 
-        p.file.toLowerCase().endsWith(document.uri.fsPath.toLowerCase().replace(/\\/g, '/').split('/').pop() || '') &&
-        p.position.line === position.line
+      const matchingPrediction = allCandidates.find(p =>
+        this.isFileMatch(document.uri, p.file) && p.position.line === position.line
       );
 
-      if (matchingPrediction && matchingPrediction.suggestedAction) {
-          const action = matchingPrediction.suggestedAction;
-          const code = 'code' in action ? action.code : '';
-          const range = 'range' in action 
-            ? new vscode.Range(action.range.startLine, action.range.startCharacter, action.range.endLine, action.range.endCharacter)
-            : new vscode.Range(position, position);
+      if (matchingPrediction?.suggestedAction) {
+        const action = matchingPrediction.suggestedAction;
+        const lineText = document.lineAt(position.line).text;
+        const lineEnd = document.lineAt(position.line).range.end;
 
+        let insertText = '';
+        let replaceRange = new vscode.Range(position, position);
+
+        if (action.type === 'delete') {
+          // Delete: replace the entire line content with nothing
+          replaceRange = new vscode.Range(
+            new vscode.Position(position.line, 0),
+            lineEnd
+          );
+          insertText = '';
+        } else if (action.type === 'replace' && 'code' in action) {
+          // Replace: swap the entire line with the fixed code
+          replaceRange = new vscode.Range(
+            new vscode.Position(position.line, 0),
+            lineEnd
+          );
+          // Ensure the replacement preserves indentation from the suggested code
+          insertText = (action as any).code || '';
+        } else if (action.type === 'insert' && 'code' in action) {
+          // Insert: add new code at cursor position
+          replaceRange = new vscode.Range(position, position);
+          insertText = (action as any).code || '';
+        }
+
+        // Only inject if there's actually something to do
+        if (insertText !== lineText || action.type === 'delete') {
           const result: CompletionResult = {
-              id: `pred-${Date.now()}`,
-              text: code,
-              insertText: code,
-              range: range,
-              confidence: matchingPrediction.confidence,
-              source: 'block',
-              metadata: { modelLatencyMs: 0, contextTokens: 0, completionTokens: 0, cached: true }
+            id: `pred-${Date.now()}`,
+            text: insertText,
+            insertText: insertText,
+            range: replaceRange,
+            confidence: matchingPrediction.confidence,
+            source: 'block',
+            metadata: { modelLatencyMs: 0, contextTokens: 0, completionTokens: 0, cached: true }
           };
-          this.logger.debug(`Using predicted ${action.type} as instant completion`);
-          return [this.createInlineItem(result, position, document)];
+          this.logger.debug(`Injecting predicted ${action.type} as instant completion`);
+
+          const item = new vscode.InlineCompletionItem(insertText, replaceRange);
+          item.command = {
+            title: 'Post-Acceptance Hook',
+            command: 'sonec.onCompletionAccepted',
+            arguments: [result]
+          };
+          return [item];
+        }
       }
 
       // 2. Latency reduction: Check for prefetched results
@@ -457,5 +486,14 @@ export class SonecCompletionProvider
       'scm-input',
     ];
     return excluded.includes(langId);
+  }
+
+  /**
+   * Check if a document URI matches a prediction file path by comparing basenames.
+   */
+  private isFileMatch(docUri: vscode.Uri, predFile: string): boolean {
+    const docName = docUri.fsPath.toLowerCase().replace(/\\/g, '/').split('/').pop() || '';
+    const predName = predFile.toLowerCase().replace(/\\/g, '/').split('/').pop() || '';
+    return docName === predName;
   }
 }
