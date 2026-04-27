@@ -6,7 +6,7 @@
  * - Open editor tabs
  * - Related files via imports / symbol graph
  * - Git diffs and recent edits
- * - Agentic tools (Diagnostics, Imports, Definitions)
+ * - Agentic tools (Diagnostics, Imports, Definitions, History, Graph, Usage)
  */
 
 import * as vscode from 'vscode';
@@ -32,6 +32,9 @@ import { ContextRanker } from './context-ranker';
 import { DiagnosticAnalyzer } from '../tools/diagnostic-analyzer';
 import { ImportTool } from '../tools/import-tool';
 import { DefinitionTool } from '../tools/definition-tool';
+import { HistoryTool } from '../tools/history-tool';
+import { ProjectGraphTool } from '../tools/project-graph-tool';
+import { SymbolUsageTool } from '../tools/symbol-usage-tool';
 
 const CURSOR_WINDOW_LINES = 60;
 const MAX_RELATED_FILES = 8;
@@ -51,6 +54,9 @@ export class ContextEngine implements vscode.Disposable {
   private diagnosticAnalyzer: DiagnosticAnalyzer;
   private importTool: ImportTool;
   private definitionTool: DefinitionTool;
+  private historyTool: HistoryTool;
+  private projectGraphTool: ProjectGraphTool;
+  private symbolUsageTool: SymbolUsageTool;
 
   private editHistory: EditEvent[] = [];
   private disposables: vscode.Disposable[] = [];
@@ -70,6 +76,9 @@ export class ContextEngine implements vscode.Disposable {
     this.diagnosticAnalyzer = DiagnosticAnalyzer.getInstance();
     this.importTool = ImportTool.getInstance();
     this.definitionTool = DefinitionTool.getInstance();
+    this.historyTool = HistoryTool.getInstance();
+    this.projectGraphTool = ProjectGraphTool.getInstance();
+    this.symbolUsageTool = SymbolUsageTool.getInstance();
 
     this.setupEditTracking();
   }
@@ -87,26 +96,46 @@ export class ContextEngine implements vscode.Disposable {
     try {
       const cursorContext = this.buildCursorContext(document, position);
       
-      const [openFiles, symbols, imports, gitDiffs, diagAnalys, importAnalys] = await Promise.all([
+      const [
+        openFiles, 
+        symbols, 
+        imports, 
+        gitDiffs, 
+        diagAnalys, 
+        importAnalys, 
+        fileHistory, 
+        projectRel
+      ] = await Promise.all([
         this.getOpenFileContexts(document.uri),
         this.symbolAnalyzer.getSymbols(document, token, MAX_SYMBOLS),
         this.importAnalyzer.analyzeImports(document),
         this.gitAnalyzer.getRecentDiffs(),
         this.diagnosticAnalyzer.analyzeDiagnostics(document, position),
-        this.importTool.getImportPrompt(document)
+        this.importTool.getImportPrompt(document),
+        this.historyTool.getFileHistory(document.uri.fsPath),
+        this.projectGraphTool.findRelatedFiles(document)
       ]);
 
       if (token.isCancellationRequested) {
         throw new Error('Context building cancelled');
       }
 
-      // Try to resolve definition at cursor if it's a symbol
+      // Try to resolve definition and usage at cursor
       let resolvedDefinitions = '';
+      let symbolUsages = '';
       const wordRange = document.getWordRangeAtPosition(position);
+      
       if (wordRange) {
-        const def = await this.definitionTool.resolveDefinition(document, position);
+        const [def, usages] = await Promise.all([
+            this.definitionTool.resolveDefinition(document, position),
+            this.symbolUsageTool.findUsages(document, position)
+        ]);
+        
         if (def) {
           resolvedDefinitions = this.definitionTool.formatForPrompt([def]);
+        }
+        if (usages.length > 0) {
+          symbolUsages = this.symbolUsageTool.formatForPrompt(usages);
         }
       }
 
@@ -134,7 +163,10 @@ export class ContextEngine implements vscode.Disposable {
         diagnostics: docDiagnostics,
         diagnosticSummary: this.diagnosticAnalyzer.formatForPrompt(diagAnalys),
         importSuggestions: importAnalys,
-        resolvedDefinitions: resolvedDefinitions
+        resolvedDefinitions: resolvedDefinitions,
+        projectRelationships: this.projectGraphTool.formatForPrompt(projectRel),
+        symbolUsages: symbolUsages,
+        fileHistory: this.historyTool.formatForPrompt(fileHistory)
       };
 
       const compressed = this.contextRanker.rankAndCompress(

@@ -123,6 +123,8 @@ export class AutoCodeCompletionProvider
 
       const startTime = Date.now();
       let completion = await this.predictionEngine.getCompletion(
+        document,
+        position,
         projectContext,
         token
       );
@@ -311,6 +313,8 @@ export class AutoCodeCompletionProvider
         );
 
         const result = await this.predictionEngine.getCompletion(
+          document,
+          nextPosition,
           context,
           cts.token
         );

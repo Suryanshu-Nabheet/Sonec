@@ -529,7 +529,7 @@ export class SettingsPanel implements vscode.Disposable {
 <body>
   <div class="header">
     <h1>AutoCode Settings</h1>
-    <p>Structured Omniscient Neural Editor & Compiler</p>
+    <p>AutoCode Completion</p>
     <div class="badge warn" id="badge"><span id="badgeText">Checking...</span></div>
   </div>
 

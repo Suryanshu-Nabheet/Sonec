@@ -2,7 +2,8 @@
  * AutoCode Prompt Builder
  * 
  * Constructs highly optimized prompts for the model layer from ProjectContext.
- * Enriched with agentic tool outputs (diagnostics, imports, definitions).
+ * Enriched with super-advanced agentic tool outputs (diagnostics, imports, definitions,
+ * history, project relationships, and symbol usage).
  */
 
 import * as vscode from 'vscode';
@@ -42,6 +43,21 @@ export class PromptBuilder {
       sections.push(context.resolvedDefinitions);
     }
 
+    // Advanced Agentic Sections: Symbol Usage Examples
+    if (context.symbolUsages) {
+      sections.push(context.symbolUsages);
+    }
+
+    // Advanced Agentic Sections: File History (Commit messages)
+    if (context.fileHistory) {
+      sections.push(context.fileHistory);
+    }
+
+    // Advanced Agentic Sections: Project Relationships (Structural context)
+    if (context.projectRelationships) {
+      sections.push(context.projectRelationships);
+    }
+
     // Related file signatures
     if (context.relatedFiles.length > 0) {
       sections.push(this.buildRelatedFilesSection(context));
@@ -57,7 +73,12 @@ export class PromptBuilder {
       sections.push(this.buildSymbolsSection(context));
     }
 
-    // Git history
+    // Recent edits (temporal context)
+    if (context.recentEdits.length > 0) {
+        sections.push(this.buildRecentEditsSection(context));
+    }
+
+    // Git history (current changes)
     if (context.gitDiffs.length > 0) {
       sections.push(this.buildGitDiffSection(context));
     }
@@ -71,9 +92,9 @@ export class PromptBuilder {
   }
 
   private buildSystemSection(): string {
-    return `You are AutoCode, the world's most advanced autonomous coding engine. You specialize in low-latency code completion.
-You are "agentic" and aware of current syntax errors, missing imports, and type definitions provided in the context.
-Use this information to suggest code that FIXES current issues and follows project patterns.
+    return `You are AutoCode, the world's most advanced autonomous coding engine.
+You are "super-agentic" and aware of cross-file patterns, naming conventions, and project evolution history.
+Use the provided diagnostic summaries, symbol usages, and file relationships to provide highly accurate completions.
 
 RULES:
 1. Output ONLY the code to be inserted at the cursor.
@@ -120,6 +141,14 @@ Constants: ${conventions.constants}
       .join('\n');
 
     return `<symbols_in_scope>\n${symbolList}\n</symbols_in_scope>`;
+  }
+
+  private buildRecentEditsSection(context: ProjectContext): string {
+      const edits = context.recentEdits
+        .slice(-5)
+        .map(e => `- ${e.file}: "${e.newText.trim()}"`)
+        .join('\n');
+      return `<recent_session_edits>\n${edits}\n</recent_session_edits>`;
   }
 
   private buildGitDiffSection(context: ProjectContext): string {

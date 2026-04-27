@@ -119,6 +119,9 @@ export interface ProjectContext {
   diagnosticSummary?: string;
   importSuggestions?: string;
   resolvedDefinitions?: string;
+  projectRelationships?: string;
+  symbolUsages?: string;
+  fileHistory?: string;
 }
 
 /**
