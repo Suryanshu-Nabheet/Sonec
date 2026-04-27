@@ -116,6 +116,9 @@ export interface ProjectContext {
   projectStyle: ProjectStyle;
   resolvedSignatures?: string[];
   diagnostics?: any[];
+  diagnosticSummary?: string;
+  importSuggestions?: string;
+  resolvedDefinitions?: string;
 }
 
 /**

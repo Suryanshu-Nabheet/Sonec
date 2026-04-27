@@ -2,6 +2,7 @@
  * AutoCode Prompt Builder
  * 
  * Constructs highly optimized prompts for the model layer from ProjectContext.
+ * Enriched with agentic tool outputs (diagnostics, imports, definitions).
  */
 
 import * as vscode from 'vscode';
@@ -26,6 +27,21 @@ export class PromptBuilder {
     // Project style
     sections.push(this.buildStyleSection(context.projectStyle));
 
+    // Agentic Sections: Diagnostics & Issues
+    if (context.diagnosticSummary) {
+      sections.push(context.diagnosticSummary);
+    }
+
+    // Agentic Sections: Import Suggestions
+    if (context.importSuggestions) {
+      sections.push(context.importSuggestions);
+    }
+
+    // Agentic Sections: Resolved Definitions
+    if (context.resolvedDefinitions) {
+      sections.push(context.resolvedDefinitions);
+    }
+
     // Related file signatures
     if (context.relatedFiles.length > 0) {
       sections.push(this.buildRelatedFilesSection(context));
@@ -34,11 +50,6 @@ export class PromptBuilder {
     // Signatures and types
     if (context.resolvedSignatures && context.resolvedSignatures.length > 0) {
         sections.push(`<signatures>\n${context.resolvedSignatures.join('\n')}\n</signatures>`);
-    }
-
-    // Diagnostics
-    if (context.diagnostics && context.diagnostics.length > 0) {
-        sections.push(this.buildDiagnosticsSection(context));
     }
 
     // Symbols in scope
@@ -61,6 +72,9 @@ export class PromptBuilder {
 
   private buildSystemSection(): string {
     return `You are AutoCode, the world's most advanced autonomous coding engine. You specialize in low-latency code completion.
+You are "agentic" and aware of current syntax errors, missing imports, and type definitions provided in the context.
+Use this information to suggest code that FIXES current issues and follows project patterns.
+
 RULES:
 1. Output ONLY the code to be inserted at the cursor.
 2. NO markdown, NO explanations, NO code blocks.
@@ -121,44 +135,6 @@ Constants: ${conventions.constants}
       .join('\n\n');
 
     return `<git_changes>\n${diffs}\n</git_changes>`;
-  }
-
-  private buildDiagnosticsSection(context: ProjectContext): string {
-    const allDiagnostics: {file: string, diagnostic: vscode.Diagnostic}[] = [];
-    
-    if (context.diagnostics) {
-        context.diagnostics.forEach(d => allDiagnostics.push({
-            file: context.currentFile.file.relativePath,
-            diagnostic: d
-        }));
-    }
-    
-    context.relatedFiles.forEach(f => {
-        if (f.diagnostics) {
-            f.diagnostics.forEach(d => allDiagnostics.push({
-                file: f.relativePath,
-                diagnostic: d
-            }));
-        }
-    });
-
-    if (allDiagnostics.length === 0) return '';
-
-    const errorList = allDiagnostics
-      .slice(0, 15)
-      .map(({file, diagnostic: d}) => `  - ${file}:[L${d.range.start.line + 1}] ${d.message} (${this.severityName(d.severity)})`)
-      .join('\n');
-
-    return `<diagnostics>\n${errorList}\n</diagnostics>`;
-  }
-
-  private severityName(severity: vscode.DiagnosticSeverity): string {
-    switch (severity) {
-      case vscode.DiagnosticSeverity.Error: return 'Error';
-      case vscode.DiagnosticSeverity.Warning: return 'Warning';
-      case vscode.DiagnosticSeverity.Information: return 'Info';
-      default: return 'Hint';
-    }
   }
 
   private symbolKindName(kind: number): string {

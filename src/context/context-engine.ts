@@ -6,7 +6,7 @@
  * - Open editor tabs
  * - Related files via imports / symbol graph
  * - Git diffs and recent edits
- * - Project-level style patterns
+ * - Agentic tools (Diagnostics, Imports, Definitions)
  */
 
 import * as vscode from 'vscode';
@@ -28,13 +28,15 @@ import { StyleAnalyzer } from '../style-learning/style-analyzer';
 import { SemanticResolver } from './semantic-resolver';
 import { ContextRanker } from './context-ranker';
 
+// Agentic Tools
+import { DiagnosticAnalyzer } from '../tools/diagnostic-analyzer';
+import { ImportTool } from '../tools/import-tool';
+import { DefinitionTool } from '../tools/definition-tool';
+
 const CURSOR_WINDOW_LINES = 60;
 const MAX_RELATED_FILES = 8;
 const MAX_SYMBOLS = 100;
 
-/**
- * Manages the assembly and ranking of contextual information for code generation.
- */
 export class ContextEngine implements vscode.Disposable {
   private config: ConfigManager;
   private logger: Logger;
@@ -45,6 +47,11 @@ export class ContextEngine implements vscode.Disposable {
   private styleAnalyzer: StyleAnalyzer;
   private semanticResolver: SemanticResolver;
   private contextRanker: ContextRanker;
+  
+  private diagnosticAnalyzer: DiagnosticAnalyzer;
+  private importTool: ImportTool;
+  private definitionTool: DefinitionTool;
+
   private editHistory: EditEvent[] = [];
   private disposables: vscode.Disposable[] = [];
   private readonly MAX_EDIT_HISTORY = 100;
@@ -59,6 +66,10 @@ export class ContextEngine implements vscode.Disposable {
     this.styleAnalyzer = new StyleAnalyzer();
     this.semanticResolver = new SemanticResolver();
     this.contextRanker = new ContextRanker();
+    
+    this.diagnosticAnalyzer = DiagnosticAnalyzer.getInstance();
+    this.importTool = ImportTool.getInstance();
+    this.definitionTool = DefinitionTool.getInstance();
 
     this.setupEditTracking();
   }
@@ -76,15 +87,27 @@ export class ContextEngine implements vscode.Disposable {
     try {
       const cursorContext = this.buildCursorContext(document, position);
       
-      const [openFiles, symbols, imports, gitDiffs] = await Promise.all([
+      const [openFiles, symbols, imports, gitDiffs, diagAnalys, importAnalys] = await Promise.all([
         this.getOpenFileContexts(document.uri),
         this.symbolAnalyzer.getSymbols(document, token, MAX_SYMBOLS),
         this.importAnalyzer.analyzeImports(document),
-        this.gitAnalyzer.getRecentDiffs()
+        this.gitAnalyzer.getRecentDiffs(),
+        this.diagnosticAnalyzer.analyzeDiagnostics(document, position),
+        this.importTool.getImportPrompt(document)
       ]);
 
       if (token.isCancellationRequested) {
         throw new Error('Context building cancelled');
+      }
+
+      // Try to resolve definition at cursor if it's a symbol
+      let resolvedDefinitions = '';
+      const wordRange = document.getWordRangeAtPosition(position);
+      if (wordRange) {
+        const def = await this.definitionTool.resolveDefinition(document, position);
+        if (def) {
+          resolvedDefinitions = this.definitionTool.formatForPrompt([def]);
+        }
       }
 
       const lineText = document.lineAt(position.line).text.trim();
@@ -109,6 +132,9 @@ export class ContextEngine implements vscode.Disposable {
         projectStyle,
         resolvedSignatures,
         diagnostics: docDiagnostics,
+        diagnosticSummary: this.diagnosticAnalyzer.formatForPrompt(diagAnalys),
+        importSuggestions: importAnalys,
+        resolvedDefinitions: resolvedDefinitions
       };
 
       const compressed = this.contextRanker.rankAndCompress(
@@ -132,7 +158,6 @@ export class ContextEngine implements vscode.Disposable {
       return this.buildFallbackContext(document, position);
     }
   }
-
 
   private buildCursorContext(
     document: vscode.TextDocument,
