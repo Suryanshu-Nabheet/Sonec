@@ -79,14 +79,17 @@ export class AutoCodeCompletionProvider
                 this.acceptedOffset += typedText.length;
                 this.lastPosition = position;
                 
-                return [new vscode.InlineCompletionItem(
-                    remaining.substring(typedText.length),
-                    new vscode.Range(position, position)
-                )];
-            } else {
-                this.currentCompletion = null;
-                this.acceptedOffset = 0;
+                const newRemaining = remaining.substring(typedText.length);
+                if (newRemaining.length > 0) {
+                    return [new vscode.InlineCompletionItem(
+                        newRemaining,
+                        new vscode.Range(position, position)
+                    )];
+                }
             }
+            // If it doesn't match, we clear and fall through to fetch new completion
+            this.currentCompletion = null;
+            this.acceptedOffset = 0;
         } else if (position.line !== this.lastPosition.line || position.character < this.lastPosition.character) {
             this.currentCompletion = null;
             this.acceptedOffset = 0;
@@ -333,7 +336,6 @@ export class AutoCodeCompletionProvider
 
   private isExcludedLanguage(langId: string): boolean {
     const excluded = [
-      'plaintext',
       'log',
       'output',
       'binary',

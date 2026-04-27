@@ -44,25 +44,26 @@ export class PredictionEngine implements vscode.Disposable {
     const cursorLine = document.lineAt(position.line).text;
     const linePrefix = cursorLine.substring(0, position.character);
     
-    // 1. Advanced Cache Lookup
+    // 1. FAST-PATH: Immediate Cache Lookup (Sub-millisecond)
     const cacheKey = `${document.uri.toString()}:${position.line}:${linePrefix}`;
-    const contextHash = this.cache.generateHash(context.currentFile.precedingLines);
-    const cached = await this.cache.get(cacheKey, contextHash);
+    const cached = await this.cache.get(cacheKey);
     
     if (cached) {
-      this.logger.debug(`Cache hit for completion at L${position.line}`);
-      this.eventBus.emit({ type: 'cache_hit', data: { key: cacheKey } });
+      this.logger.debug(`Fast-path cache hit: L${position.line}`);
       return cached;
     }
 
-    // 2. Prompt Construction
+    // 2. Heavy Context Hash Validation (If not in fast-path)
+    const contextHash = this.cache.generateHash(context.currentFile.precedingLines);
+
+    // 3. Prompt Construction
     const prompt = this.promptBuilder.buildCompletionPrompt(context);
     
-    // 3. Model Inference
+    // 4. Model Inference
     const request: ModelRequest = {
       prompt,
       maxTokens: this.config.getValue('maxCompletionLines') * 50,
-      temperature: 0.2,
+      temperature: 0.1, // Lower temperature for more accurate completions
       stopSequences: ['\n\n', '<|fim_suffix|>', '```'],
       stream: this.config.getValue('streamingEnabled'),
     };
@@ -76,16 +77,19 @@ export class PredictionEngine implements vscode.Disposable {
       const response = await this.modelLayer.complete(request);
       if (token.isCancellationRequested) {return null;}
 
-      // 4. Post-processing
-      const completionText = this.postProcess(response.text);
-      if (!completionText) return null;
+      // 5. Post-processing
+      const completionText = this.postProcess(response.text, linePrefix);
+      if (!completionText) {
+          this.logger.debug('Completion post-processed to empty string');
+          return null;
+      }
 
       const result: CompletionResult = {
         id: Math.random().toString(36).substring(7),
         text: completionText,
         insertText: completionText,
         range: new vscode.Range(position, position),
-        confidence: 0.9, // Simplified
+        confidence: 0.9,
         source: 'inline',
         metadata: {
           modelLatencyMs: response.latencyMs,
@@ -95,7 +99,7 @@ export class PredictionEngine implements vscode.Disposable {
         },
       };
 
-      // 5. Update Cache
+      // 6. Update Cache
       this.cache.set(cacheKey, result, contextHash);
 
       return result;
@@ -105,14 +109,30 @@ export class PredictionEngine implements vscode.Disposable {
     }
   }
 
-  private postProcess(text: string): string {
-    let processed = text.trimEnd();
+  private postProcess(text: string, prefix: string): string {
+    let processed = text;
     
-    // Remove model artifacts
+    // Remove common prefixes that the model might repeat
+    if (processed.startsWith(prefix)) {
+        processed = processed.substring(prefix.length);
+    }
+
+    // Strip model FIM markers
     processed = processed.replace(/<\|fim_middle\|>/g, '');
     processed = processed.replace(/<\|fim_suffix\|>/g, '');
-    processed = processed.replace(/^[#\s]*TODO:.*$/gm, '');
+    processed = processed.replace(/<\|fim_prefix\|>/g, '');
     
+    // Handle whitespace-only completions
+    if (processed.trim().length === 0 && processed.length > 0) {
+        return processed;
+    }
+
+    processed = processed.trimEnd();
+    
+    // Reject useless completions
+    if (processed.length === 0) return '';
+    if (processed.length > 1000) return ''; // Sanity check
+
     return processed;
   }
 

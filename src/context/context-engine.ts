@@ -61,6 +61,9 @@ export class ContextEngine implements vscode.Disposable {
   private editHistory: EditEvent[] = [];
   private disposables: vscode.Disposable[] = [];
   private readonly MAX_EDIT_HISTORY = 100;
+  
+  private lastContext: ProjectContext | null = null;
+  private lastPosition: string = '';
 
   constructor() {
     this.config = ConfigManager.getInstance();
@@ -96,6 +99,21 @@ export class ContextEngine implements vscode.Disposable {
     try {
       const cursorContext = this.buildCursorContext(document, position);
       
+      // FAST-PATH: Reuse context if typing on the same line and close to last position
+      const posKey = `${document.uri.toString()}:${position.line}`;
+      const characterDelta = this.lastPosition.startsWith(posKey) 
+        ? Math.abs(position.character - parseInt(this.lastPosition.split(':')[2]))
+        : 1000;
+
+      if (this.lastContext && characterDelta < 5) {
+        this.logger.debug('Context fast-path: reusing previous metadata');
+        const fastContext: ProjectContext = {
+            ...this.lastContext,
+            currentFile: cursorContext
+        };
+        return fastContext;
+      }
+
       const [
         openFiles, 
         symbols, 
@@ -173,6 +191,10 @@ export class ContextEngine implements vscode.Disposable {
         rankedContext,
         this.config.getValue('maxContextTokens')
       );
+
+      // Cache for fast-path
+      this.lastContext = compressed;
+      this.lastPosition = `${document.uri.toString()}:${position.line}:${position.character}`;
 
       const elapsed = timer();
       this.eventBus.emit({
