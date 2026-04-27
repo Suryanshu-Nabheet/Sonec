@@ -231,7 +231,6 @@ export class SettingsPanel implements vscode.Disposable {
       maxContextTokens: config.maxContextTokens,
       debounceMs: config.debounceMs,
       prefetchEnabled: config.prefetchEnabled,
-      multiFileEnabled: config.multiFileEnabled,
       maxCompletionLines: config.maxCompletionLines,
       streamingEnabled: config.streamingEnabled,
       cacheEnabled: config.cacheEnabled,
@@ -587,8 +586,6 @@ export class SettingsPanel implements vscode.Disposable {
       <div class="or"><div class="ot"><div class="on-label">Prefetch</div><div class="od">Pre-generate next completion</div></div>
         <label class="sw"><input type="checkbox" id="tPre" data-k="prefetchEnabled"><span class="sl"></span></label></div>
 
-      <div class="or"><div class="ot"><div class="on-label">Multi-File</div><div class="od">Cross-file context</div></div>
-        <label class="sw"><input type="checkbox" id="tMf" data-k="multiFileEnabled"><span class="sl"></span></label></div>
 
       <div class="or"><div class="ot"><div class="on-label">Style Learning</div><div class="od">Match project conventions</div></div>
         <label class="sw"><input type="checkbox" id="tSl" data-k="styleLearnEnabled"><span class="sl"></span></label></div>
@@ -636,9 +633,6 @@ export class SettingsPanel implements vscode.Disposable {
         <kbd>Tab</kbd> <span>Accept suggestion</span>
         <kbd>Cmd+→</kbd> <span>Accept word</span>
         <kbd>Cmd+Shift+→</kbd> <span>Accept line</span>
-        <kbd>Cmd+]</kbd> <span>Next edit</span>
-        <kbd>Cmd+[</kbd> <span>Prev edit</span>
-        <kbd>Cmd+Shift+Enter</kbd> <span>Transform</span>
         <kbd>Esc</kbd> <span>Dismiss</span>
         <kbd>Ctrl+Space</kbd> <span>Force trigger</span>
       </div>
@@ -677,7 +671,6 @@ export class SettingsPanel implements vscode.Disposable {
       document.getElementById('tEn').checked = c.enabled;
       document.getElementById('tStr').checked = c.streamingEnabled;
       document.getElementById('tPre').checked = c.prefetchEnabled;
-      document.getElementById('tMf').checked = c.multiFileEnabled;
       document.getElementById('tSl').checked = c.styleLearnEnabled;
       document.getElementById('tCa').checked = c.cacheEnabled;
       document.getElementById('nDb').value = c.debounceMs;
