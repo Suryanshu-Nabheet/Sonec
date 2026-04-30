@@ -17,6 +17,7 @@ import {
   SymbolInfo,
   ImportInfo,
   EditEvent,
+  GitDiff,
 } from '../core/types';
 import { ConfigManager } from '../core/config';
 import { Logger } from '../core/logger';
@@ -101,9 +102,15 @@ export class ContextEngine implements vscode.Disposable {
       
       // FAST-PATH: Reuse context if typing on the same line and close to last position
       const posKey = `${document.uri.toString()}:${position.line}`;
-      const characterDelta = this.lastPosition.startsWith(posKey) 
-        ? Math.abs(position.character - parseInt(this.lastPosition.split(':')[2]))
-        : 1000;
+      
+      let characterDelta = 1000;
+      if (this.lastPosition && this.lastPosition.startsWith(posKey)) {
+          const parts = this.lastPosition.split(':');
+          const lastChar = parseInt(parts[parts.length - 1]);
+          if (!isNaN(lastChar)) {
+              characterDelta = Math.abs(position.character - lastChar);
+          }
+      }
 
       if (this.lastContext && characterDelta < 5) {
         this.logger.debug('Context fast-path: reusing previous metadata');
@@ -114,29 +121,35 @@ export class ContextEngine implements vscode.Disposable {
         return fastContext;
       }
 
+      // Critical context needed for every completion
       const [
-        openFiles, 
         symbols, 
         imports, 
-        gitDiffs, 
         diagAnalys, 
-        importAnalys, 
-        fileHistory, 
-        projectRel
       ] = await Promise.all([
-        this.getOpenFileContexts(document.uri),
         this.symbolAnalyzer.getSymbols(document, token, MAX_SYMBOLS),
         this.importAnalyzer.analyzeImports(document),
-        this.gitAnalyzer.getRecentDiffs(),
         this.diagnosticAnalyzer.analyzeDiagnostics(document, position),
-        this.importTool.getImportPrompt(document),
-        this.historyTool.getFileHistory(document.uri.fsPath),
-        this.projectGraphTool.findRelatedFiles(document)
       ]);
 
       if (token.isCancellationRequested) {
         throw new Error('Context building cancelled');
       }
+
+      // Non-critical context (can be empty or stale)
+      const [
+        openFiles,
+        gitDiffs,
+        importAnalys,
+        fileHistory,
+        projectRel
+      ] = await Promise.all([
+        this.getOpenFileContexts(document.uri).catch(() => []),
+        this.gitAnalyzer.getRecentDiffs().catch(() => []),
+        this.importTool.getImportPrompt(document).catch(() => ''),
+        this.historyTool.getFileHistory(document.uri.fsPath).catch(() => []),
+        this.projectGraphTool.findRelatedFiles(document).catch(() => [])
+      ]);
 
       // Try to resolve definition and usage at cursor
       let resolvedDefinitions = '';
@@ -145,14 +158,14 @@ export class ContextEngine implements vscode.Disposable {
       
       if (wordRange) {
         const [def, usages] = await Promise.all([
-            this.definitionTool.resolveDefinition(document, position),
-            this.symbolUsageTool.findUsages(document, position)
+            this.definitionTool.resolveDefinition(document, position).catch(() => null),
+            this.symbolUsageTool.findUsages(document, position).catch(() => [])
         ]);
         
         if (def) {
           resolvedDefinitions = this.definitionTool.formatForPrompt([def]);
         }
-        if (usages.length > 0) {
+        if (usages && usages.length > 0) {
           symbolUsages = this.symbolUsageTool.formatForPrompt(usages);
         }
       }
@@ -161,8 +174,8 @@ export class ContextEngine implements vscode.Disposable {
       const isComplex = lineText.includes('.') || lineText.startsWith('import') || lineText.includes('(');
       
       const [relatedFiles, resolvedSignatures] = await Promise.all([
-        this.findRelatedFiles(document, imports, symbols),
-        isComplex ? this.semanticResolver.resolveImportSignatures(document, imports, token) : Promise.resolve([])
+        this.findRelatedFiles(document, imports, symbols).catch(() => []),
+        isComplex ? this.semanticResolver.resolveImportSignatures(document, imports, token).catch(() => []) : Promise.resolve([])
       ]);
 
       const projectStyle = this.styleAnalyzer.getDefaultStyle();
@@ -170,21 +183,21 @@ export class ContextEngine implements vscode.Disposable {
 
       const rankedContext: ProjectContext = {
         currentFile: cursorContext,
-        openFiles,
-        relatedFiles,
+        openFiles: openFiles as FileContext[],
+        relatedFiles: relatedFiles as FileContext[],
         symbols,
         imports,
-        gitDiffs,
+        gitDiffs: gitDiffs as GitDiff[],
         recentEdits: this.getRecentEdits(),
         projectStyle,
-        resolvedSignatures,
+        resolvedSignatures: resolvedSignatures as string[],
         diagnostics: docDiagnostics,
         diagnosticSummary: this.diagnosticAnalyzer.formatForPrompt(diagAnalys),
-        importSuggestions: importAnalys,
+        importSuggestions: importAnalys as string,
         resolvedDefinitions: resolvedDefinitions,
-        projectRelationships: this.projectGraphTool.formatForPrompt(projectRel),
+        projectRelationships: this.projectGraphTool.formatForPrompt(projectRel as any),
         symbolUsages: symbolUsages,
-        fileHistory: this.historyTool.formatForPrompt(fileHistory)
+        fileHistory: this.historyTool.formatForPrompt(fileHistory as any)
       };
 
       const compressed = this.contextRanker.rankAndCompress(

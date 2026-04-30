@@ -62,25 +62,19 @@ export class PredictionEngine implements vscode.Disposable {
     // 4. Model Inference
     const request: ModelRequest = {
       prompt,
-      maxTokens: this.config.getValue('maxCompletionLines') * 50,
-      temperature: 0.1, // Lower temperature for more accurate completions
-      stopSequences: ['\n\n', '<|fim_suffix|>', '```'],
+      maxTokens: Math.min(this.config.getValue('maxCompletionLines') * 10, 500),
+      temperature: 0.1,
+      stopSequences: ['<|fim_suffix|>', '<|file_separator|>', '```'],
       stream: this.config.getValue('streamingEnabled'),
     };
 
     try {
-      this.eventBus.emit({ 
-        type: 'completion_triggered', 
-        data: { file: document.fileName, position } 
-      });
-
       const response = await this.modelLayer.complete(request);
       if (token.isCancellationRequested) {return null;}
 
       // 5. Post-processing
       const completionText = this.postProcess(response.text, linePrefix);
       if (!completionText) {
-          this.logger.debug('Completion post-processed to empty string');
           return null;
       }
 

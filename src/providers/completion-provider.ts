@@ -108,7 +108,10 @@ export class AutoCodeCompletionProvider
       });
 
       // Check for prefetched results
-      const prefetchKey = `${document.uri.fsPath}:${position.line}:${position.character}`;
+      const lineText = document.lineAt(position.line).text;
+      const linePrefix = lineText.substring(0, position.character);
+      const prefetchKey = `${document.uri.toString()}:${position.line}:${linePrefix}`;
+      
       if (this.prefetchResult && this.prefetchResult.key === prefetchKey) {
         this.logger.debug('Using prefetched completion');
         return [this.createInlineItem(this.prefetchResult.result, position, document)];
@@ -323,7 +326,9 @@ export class AutoCodeCompletionProvider
         );
 
         if (result) {
-          const key = `${document.uri.fsPath}:${nextPosition.line}:${nextPosition.character}`;
+          const prefetchLineText = document.lineAt(nextPosition.line).text;
+          const prefetchPrefix = prefetchLineText.substring(0, nextPosition.character);
+          const key = `${document.uri.toString()}:${nextPosition.line}:${prefetchPrefix}`;
           this.prefetchResult = { key, result };
         }
 

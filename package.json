@@ -66,6 +66,14 @@
         "command": "autocode.openSettings",
         "title": "AutoCode: Open Settings",
         "icon": "$(gear)"
+      },
+      {
+        "command": "autocode.checkStatus",
+        "title": "AutoCode: Check Connection Status"
+      },
+      {
+        "command": "autocode.onCompletionAccepted",
+        "title": "AutoCode: Completion Accepted (Internal)"
       }
     ],
     "keybindings": [

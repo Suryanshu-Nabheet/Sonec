@@ -22,11 +22,12 @@ import { Logger } from '../core/logger';
  * Provider-specific adapter interface
  */
 interface ProviderAdapter {
-  complete(request: ModelRequest): Promise<ModelResponse>;
+  complete(request: ModelRequest, signal?: AbortSignal): Promise<ModelResponse>;
   stream(
     request: ModelRequest,
     callback: StreamCallback,
-    token?: vscode.CancellationToken
+    token?: vscode.CancellationToken,
+    signal?: AbortSignal
   ): Promise<ModelResponse>;
   checkStatus(): Promise<{ ok: boolean; error?: string }>;
 }
@@ -84,7 +85,7 @@ export class ModelLayer implements vscode.Disposable {
 
     try {
       this.logger.debug(`Sending ${category} request (${request.prompt.length} chars)`);
-      const response = await adapter.complete(request);
+      const response = await adapter.complete(request, controller.signal);
       timer();
       this.requestCount++;
       this.logger.debug(`Model response received (${response.text.length} chars)`);
@@ -121,7 +122,7 @@ export class ModelLayer implements vscode.Disposable {
     const timer = this.logger.time(`ModelLayer.stream:${category}`);
 
     try {
-      const response = await adapter.stream(request, callback, token);
+      const response = await adapter.stream(request, callback, token, controller.signal);
       timer();
       this.requestCount++;
       return response;
@@ -198,7 +199,7 @@ class OpenAIAdapter implements ProviderAdapter {
     private logger: Logger
   ) {}
 
-  async complete(request: ModelRequest): Promise<ModelResponse> {
+  async complete(request: ModelRequest, signal?: AbortSignal): Promise<ModelResponse> {
     const startTime = Date.now();
     const endpoint = this.config.getEndpoint();
     const apiKey = this.config.getValue('apiKey');
@@ -225,6 +226,7 @@ class OpenAIAdapter implements ProviderAdapter {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
+      signal
     });
 
     if (!response.ok) {
@@ -252,7 +254,8 @@ class OpenAIAdapter implements ProviderAdapter {
   async stream(
     request: ModelRequest,
     callback: StreamCallback,
-    token?: vscode.CancellationToken
+    token?: vscode.CancellationToken,
+    signal?: AbortSignal
   ): Promise<ModelResponse> {
     const startTime = Date.now();
     const endpoint = this.config.getEndpoint();
@@ -285,7 +288,7 @@ class OpenAIAdapter implements ProviderAdapter {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
-      signal: controller.signal,
+      signal: signal || controller.signal,
     });
 
     if (!response.ok) {
@@ -371,7 +374,7 @@ class AnthropicAdapter implements ProviderAdapter {
     private logger: Logger
   ) {}
 
-  async complete(request: ModelRequest): Promise<ModelResponse> {
+  async complete(request: ModelRequest, signal?: AbortSignal): Promise<ModelResponse> {
     const startTime = Date.now();
     const endpoint = this.config.getEndpoint();
     const apiKey = this.config.getValue('apiKey');
@@ -394,6 +397,7 @@ class AnthropicAdapter implements ProviderAdapter {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify(body),
+      signal
     });
 
     if (!response.ok) {
@@ -422,7 +426,8 @@ class AnthropicAdapter implements ProviderAdapter {
   async stream(
     request: ModelRequest,
     callback: StreamCallback,
-    token?: vscode.CancellationToken
+    token?: vscode.CancellationToken,
+    signal?: AbortSignal
   ): Promise<ModelResponse> {
     const startTime = Date.now();
     const endpoint = this.config.getEndpoint();
@@ -452,7 +457,7 @@ class AnthropicAdapter implements ProviderAdapter {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify(body),
-      signal: controller.signal,
+      signal: signal || controller.signal,
     });
 
     if (!response.ok) {
@@ -546,7 +551,7 @@ class OllamaAdapter implements ProviderAdapter {
     private logger: Logger
   ) {}
 
-  async complete(request: ModelRequest): Promise<ModelResponse> {
+  async complete(request: ModelRequest, signal?: AbortSignal): Promise<ModelResponse> {
     const startTime = Date.now();
     const endpoint = this.config.getEndpoint();
     const model = this.config.getValue('model');
@@ -566,6 +571,7 @@ class OllamaAdapter implements ProviderAdapter {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal
     });
 
     if (!response.ok) {
@@ -593,7 +599,8 @@ class OllamaAdapter implements ProviderAdapter {
   async stream(
     request: ModelRequest,
     callback: StreamCallback,
-    token?: vscode.CancellationToken
+    token?: vscode.CancellationToken,
+    signal?: AbortSignal
   ): Promise<ModelResponse> {
     const startTime = Date.now();
     const endpoint = this.config.getEndpoint();
@@ -619,7 +626,7 @@ class OllamaAdapter implements ProviderAdapter {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      signal: controller.signal,
+      signal: signal || controller.signal,
     });
 
     if (!response.ok) {
@@ -703,19 +710,20 @@ class CustomAdapter implements ProviderAdapter {
     private logger: Logger
   ) {}
 
-  async complete(request: ModelRequest): Promise<ModelResponse> {
+  async complete(request: ModelRequest, signal?: AbortSignal): Promise<ModelResponse> {
     // Delegates to OpenAI-compatible endpoint format
     const openaiAdapter = new OpenAIAdapter(this.config, this.logger);
-    return openaiAdapter.complete(request);
+    return openaiAdapter.complete(request, signal);
   }
 
   async stream(
     request: ModelRequest,
     callback: StreamCallback,
-    token?: vscode.CancellationToken
+    token?: vscode.CancellationToken,
+    signal?: AbortSignal
   ): Promise<ModelResponse> {
     const openaiAdapter = new OpenAIAdapter(this.config, this.logger);
-    return openaiAdapter.stream(request, callback, token);
+    return openaiAdapter.stream(request, callback, token, signal);
   }
 
   async checkStatus(): Promise<{ ok: boolean; error?: string }> {
