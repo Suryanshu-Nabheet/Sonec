@@ -87,142 +87,113 @@ export class ContextEngine implements vscode.Disposable {
     this.setupEditTracking();
   }
 
+  private lastVersion: number = -1;
+  private cachedSymbols: SymbolInfo[] = [];
+  private cachedImports: ImportInfo[] = [];
+
   /**
    * Build the full project context for a given position.
+   */
+  private backgroundContext: Partial<ProjectContext> = {};
+  private isBackgroundUpdating = false;
+
+  /**
+   * Build the project context. Returns critical data instantly,
+   * using warm background data for the rest.
    */
   async buildContext(
     document: vscode.TextDocument,
     position: vscode.Position,
     token: vscode.CancellationToken
   ): Promise<ProjectContext> {
-    const timer = this.logger.time('ContextEngine.buildContext');
+    const cursorContext = this.buildCursorContext(document, position);
+    
+    // 1. ULTRA-FAST PATH: Same line, small movement
+    const posKey = `${document.uri.toString()}:${position.line}`;
+    if (this.lastPosition && this.lastPosition.startsWith(posKey)) {
+        const lastChar = parseInt(this.lastPosition.split(':').pop() || '0');
+        if (Math.abs(position.character - lastChar) < 3 && this.lastContext) {
+            return { ...this.lastContext, currentFile: cursorContext };
+        }
+    }
+
+    // 2. CRITICAL PATH (Must be fast)
+    const isStale = this.lastVersion !== document.version;
+    const symbols = isStale ? await this.symbolAnalyzer.getSymbols(document, token, MAX_SYMBOLS) : this.cachedSymbols;
+    const imports = isStale ? this.importAnalyzer.analyzeImports(document) : this.cachedImports;
+    const diagAnalys = await this.diagnosticAnalyzer.analyzeDiagnostics(document, position);
+
+    if (isStale) {
+      this.cachedSymbols = symbols;
+      this.cachedImports = imports;
+      this.lastVersion = document.version;
+      // Trigger background refresh on document change
+      this.refreshBackgroundContext(document, position);
+    }
+
+    // 3. ASSEMBLE (Using warm background data)
+    const projectStyle = this.styleAnalyzer.getDefaultStyle();
+    
+    const context: ProjectContext = {
+      currentFile: cursorContext,
+      openFiles: (this.backgroundContext.openFiles || []) as FileContext[],
+      relatedFiles: (this.backgroundContext.relatedFiles || []) as FileContext[],
+      symbols,
+      imports,
+      gitDiffs: (this.backgroundContext.gitDiffs || []) as GitDiff[],
+      recentEdits: this.getRecentEdits(),
+      projectStyle,
+      resolvedSignatures: (this.backgroundContext.resolvedSignatures || []) as string[],
+      diagnostics: vscode.languages.getDiagnostics(document.uri),
+      diagnosticSummary: this.diagnosticAnalyzer.formatForPrompt(diagAnalys),
+      importSuggestions: (this.backgroundContext.importSuggestions || '') as string,
+      resolvedDefinitions: (this.backgroundContext.resolvedDefinitions || '') as string,
+      projectRelationships: (this.backgroundContext.projectRelationships || '') as string,
+      symbolUsages: (this.backgroundContext.symbolUsages || '') as string,
+      fileHistory: (this.backgroundContext.fileHistory || '') as string
+    };
+
+    const compressed = this.contextRanker.rankAndCompress(context, this.config.getValue('maxContextTokens'));
+    this.lastContext = compressed;
+    this.lastPosition = `${document.uri.toString()}:${position.line}:${position.character}`;
+
+    return compressed;
+  }
+
+  private async refreshBackgroundContext(document: vscode.TextDocument, position: vscode.Position) {
+    if (this.isBackgroundUpdating) return;
+    this.isBackgroundUpdating = true;
 
     try {
-      const cursorContext = this.buildCursorContext(document, position);
-      
-      // FAST-PATH: Reuse context if typing on the same line and close to last position
-      const posKey = `${document.uri.toString()}:${position.line}`;
-      
-      let characterDelta = 1000;
-      if (this.lastPosition && this.lastPosition.startsWith(posKey)) {
-          const parts = this.lastPosition.split(':');
-          const lastChar = parseInt(parts[parts.length - 1]);
-          if (!isNaN(lastChar)) {
-              characterDelta = Math.abs(position.character - lastChar);
-          }
-      }
-
-      if (this.lastContext && characterDelta < 5) {
-        this.logger.debug('Context fast-path: reusing previous metadata');
-        const fastContext: ProjectContext = {
-            ...this.lastContext,
-            currentFile: cursorContext
-        };
-        return fastContext;
-      }
-
-      // Critical context needed for every completion
-      const [
-        symbols, 
-        imports, 
-        diagAnalys, 
-      ] = await Promise.all([
-        this.symbolAnalyzer.getSymbols(document, token, MAX_SYMBOLS),
-        this.importAnalyzer.analyzeImports(document),
-        this.diagnosticAnalyzer.analyzeDiagnostics(document, position),
-      ]);
-
-      if (token.isCancellationRequested) {
-        throw new Error('Context building cancelled');
-      }
-
-      // Non-critical context (can be empty or stale)
       const [
         openFiles,
         gitDiffs,
         importAnalys,
         fileHistory,
-        projectRel
+        projectRel,
+        definitions,
+        usages
       ] = await Promise.all([
         this.getOpenFileContexts(document.uri).catch(() => []),
         this.gitAnalyzer.getRecentDiffs().catch(() => []),
         this.importTool.getImportPrompt(document).catch(() => ''),
         this.historyTool.getFileHistory(document.uri.fsPath).catch(() => []),
-        this.projectGraphTool.findRelatedFiles(document).catch(() => [])
+        this.projectGraphTool.findRelatedFiles(document).catch(() => []),
+        this.definitionTool.resolveDefinition(document, position).catch(() => null),
+        this.symbolUsageTool.findUsages(document, position).catch(() => [])
       ]);
 
-      // Try to resolve definition and usage at cursor
-      let resolvedDefinitions = '';
-      let symbolUsages = '';
-      const wordRange = document.getWordRangeAtPosition(position);
-      
-      if (wordRange) {
-        const [def, usages] = await Promise.all([
-            this.definitionTool.resolveDefinition(document, position).catch(() => null),
-            this.symbolUsageTool.findUsages(document, position).catch(() => [])
-        ]);
-        
-        if (def) {
-          resolvedDefinitions = this.definitionTool.formatForPrompt([def]);
-        }
-        if (usages && usages.length > 0) {
-          symbolUsages = this.symbolUsageTool.formatForPrompt(usages);
-        }
-      }
-
-      const lineText = document.lineAt(position.line).text.trim();
-      const isComplex = lineText.includes('.') || lineText.startsWith('import') || lineText.includes('(');
-      
-      const [relatedFiles, resolvedSignatures] = await Promise.all([
-        this.findRelatedFiles(document, imports, symbols).catch(() => []),
-        isComplex ? this.semanticResolver.resolveImportSignatures(document, imports, token).catch(() => []) : Promise.resolve([])
-      ]);
-
-      const projectStyle = this.styleAnalyzer.getDefaultStyle();
-      const docDiagnostics = vscode.languages.getDiagnostics(document.uri);
-
-      const rankedContext: ProjectContext = {
-        currentFile: cursorContext,
+      this.backgroundContext = {
         openFiles: openFiles as FileContext[],
-        relatedFiles: relatedFiles as FileContext[],
-        symbols,
-        imports,
         gitDiffs: gitDiffs as GitDiff[],
-        recentEdits: this.getRecentEdits(),
-        projectStyle,
-        resolvedSignatures: resolvedSignatures as string[],
-        diagnostics: docDiagnostics,
-        diagnosticSummary: this.diagnosticAnalyzer.formatForPrompt(diagAnalys),
         importSuggestions: importAnalys as string,
-        resolvedDefinitions: resolvedDefinitions,
+        fileHistory: this.historyTool.formatForPrompt(fileHistory as any),
         projectRelationships: this.projectGraphTool.formatForPrompt(projectRel as any),
-        symbolUsages: symbolUsages,
-        fileHistory: this.historyTool.formatForPrompt(fileHistory as any)
+        resolvedDefinitions: definitions ? this.definitionTool.formatForPrompt([definitions]) : '',
+        symbolUsages: usages.length > 0 ? this.symbolUsageTool.formatForPrompt(usages) : ''
       };
-
-      const compressed = this.contextRanker.rankAndCompress(
-        rankedContext,
-        this.config.getValue('maxContextTokens')
-      );
-
-      // Cache for fast-path
-      this.lastContext = compressed;
-      this.lastPosition = `${document.uri.toString()}:${position.line}:${position.character}`;
-
-      const elapsed = timer();
-      this.eventBus.emit({
-        type: 'context_rebuilt',
-        data: {
-          tokenCount: this.config.getValue('maxContextTokens'),
-          latencyMs: elapsed,
-        },
-      });
-
-      return compressed;
-    } catch (err) {
-      timer();
-      this.logger.error('Failed to build context', err);
-      return this.buildFallbackContext(document, position);
+    } finally {
+      this.isBackgroundUpdating = false;
     }
   }
 

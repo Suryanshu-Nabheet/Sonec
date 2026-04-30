@@ -22,68 +22,37 @@ export class PromptBuilder {
   buildCompletionPrompt(context: ProjectContext): string {
     const sections: string[] = [];
 
-    // System context
+    // 0. System instructions
     sections.push(this.buildSystemSection());
 
-    // Project style
-    sections.push(this.buildStyleSection(context.projectStyle));
-
-    // Agentic Sections: Diagnostics & Issues
-    if (context.diagnosticSummary) {
-      sections.push(context.diagnosticSummary);
+    // 1. High-Priority: Symbols & Signatures (Technical Constraints)
+    if (context.resolvedSignatures && context.resolvedSignatures.length > 0) {
+        sections.push(`<signatures>\n${context.resolvedSignatures.join('\n')}\n</signatures>`);
+    }
+    if (context.symbols.length > 0) {
+        sections.push(this.buildSymbolsSection(context));
     }
 
-    // Agentic Sections: Import Suggestions
-    if (context.importSuggestions) {
-      sections.push(context.importSuggestions);
+    // 2. Middle-Priority: Related Code & History (Contextual Clues)
+    if (context.relatedFiles.length > 0) {
+      sections.push(this.buildRelatedFilesSection(context));
     }
-
-    // Agentic Sections: Resolved Definitions
-    if (context.resolvedDefinitions) {
-      sections.push(context.resolvedDefinitions);
-    }
-
-    // Advanced Agentic Sections: Symbol Usage Examples
-    if (context.symbolUsages) {
-      sections.push(context.symbolUsages);
-    }
-
-    // Advanced Agentic Sections: File History (Commit messages)
     if (context.fileHistory) {
       sections.push(context.fileHistory);
     }
 
-    // Advanced Agentic Sections: Project Relationships (Structural context)
-    if (context.projectRelationships) {
-      sections.push(context.projectRelationships);
+    // 3. Low-Priority: Diagnostics & Edits (Correctional Clues)
+    if (context.diagnosticSummary) {
+      sections.push(context.diagnosticSummary);
     }
-
-    // Related file signatures
-    if (context.relatedFiles.length > 0) {
-      sections.push(this.buildRelatedFilesSection(context));
-    }
-
-    // Signatures and types
-    if (context.resolvedSignatures && context.resolvedSignatures.length > 0) {
-        sections.push(`<signatures>\n${context.resolvedSignatures.join('\n')}\n</signatures>`);
-    }
-
-    // Symbols in scope
-    if (context.symbols.length > 0) {
-      sections.push(this.buildSymbolsSection(context));
-    }
-
-    // Recent edits (temporal context)
     if (context.recentEdits.length > 0) {
         sections.push(this.buildRecentEditsSection(context));
     }
 
-    // Git history (current changes)
-    if (context.gitDiffs.length > 0) {
-      sections.push(this.buildGitDiffSection(context));
-    }
+    // 4. Style & Constraints
+    sections.push(this.buildStyleSection(context.projectStyle));
 
-    // FIM context
+    // 5. THE CORE: FIM (Fill-In-the-Middle)
     const cursor = context.currentFile;
     const fim = `<|fim_prefix|>${cursor.precedingLines}${cursor.linePrefix}<|fim_suffix|>${cursor.lineSuffix}${cursor.followingLines}<|fim_middle|>`;
     sections.push(fim);
@@ -92,15 +61,14 @@ export class PromptBuilder {
   }
 
   private buildSystemSection(): string {
-    return `You are AutoCode, the world's most advanced autonomous coding engine.
-You are "super-agentic" and aware of cross-file patterns, naming conventions, and project evolution history.
-Use the provided diagnostic summaries, symbol usages, and file relationships to provide highly accurate completions.
+    return `You are AutoCode, the world's most accurate autonomous coding engine.
+Context is provided in XML tags. Use it to predict the MOST LIKELY code to follow the prefix.
 
-RULES:
-1. Output ONLY the code to be inserted at the cursor.
-2. NO markdown, NO explanations, NO code blocks.
-3. Match the project's naming conventions and formatting EXACTLY.
-4. Do NOT duplicate code already present in the suffix.`;
+STRICT RULES:
+- Return ONLY the code to insert.
+- NO markdown, NO code blocks.
+- Match existing indentation and style perfectly.
+- STOP if you reach the next logical block or duplicate suffix code.`;
   }
 
   private buildStyleSection(style: ProjectStyle): string {

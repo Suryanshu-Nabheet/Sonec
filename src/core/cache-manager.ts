@@ -15,22 +15,24 @@ export class CacheManager<T> {
   private memoryCache = new Map<string, CacheEntry<T>>();
   private logger = Logger.getInstance();
   private stats: CacheStats = { hits: 0, misses: 0, evictions: 0, size: 0, hitRate: 0 };
-  private hasher?: (input: string) => string;
+  private static hasher: any = null;
 
   constructor(
     private readonly namespace: string,
     private readonly ttlSeconds: number = 300,
     private readonly maxSize: number = 500
   ) {
-    this.initHasher();
+    this.ensureHasher();
   }
 
-  private async initHasher() {
-    const { h32ToString } = await xxhash();
-    this.hasher = h32ToString;
+  private async ensureHasher() {
+    if (!CacheManager.hasher) {
+        const { h32ToString } = await xxhash();
+        CacheManager.hasher = h32ToString;
+    }
   }
 
-  public async get(key: string, contextHash?: string): Promise<T | null> {
+  public get(key: string, contextHash?: string): T | null {
     const entry = this.memoryCache.get(key);
     
     if (!entry) {
@@ -50,7 +52,6 @@ export class CacheManager<T> {
 
     // Optional context validation
     if (contextHash && entry.hash !== contextHash) {
-      this.logger.debug(`Cache key match but hash mismatch for ${this.namespace}`);
       return null;
     }
 
@@ -99,15 +100,14 @@ export class CacheManager<T> {
    * Generates a stable hash for a large block of context.
    */
   public generateHash(content: string): string {
-    if (this.hasher) {
-        return this.hasher(content);
+    if (CacheManager.hasher) {
+        return CacheManager.hasher(content);
     }
-    // Fallback simple hash
-    let hash = 0;
+    // Simple fast fallback
+    let hash = 5381;
     for (let i = 0; i < content.length; i++) {
-      hash = (hash << 5) - hash + content.charCodeAt(i);
-      hash |= 0;
+        hash = (hash * 33) ^ content.charCodeAt(i);
     }
-    return hash.toString();
+    return (hash >>> 0).toString();
   }
 }

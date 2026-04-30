@@ -32,6 +32,13 @@ export class PredictionEngine implements vscode.Disposable {
   constructor(private modelLayer: ModelLayer) {}
 
   /**
+   * Sub-millisecond lookup for cached completions
+   */
+  public async getCachedCompletion(key: string): Promise<CompletionResult | null> {
+      return this.cache.get(key);
+  }
+
+  /**
    * Main entry point for inline completions.
    */
   async getCompletion(
@@ -40,7 +47,6 @@ export class PredictionEngine implements vscode.Disposable {
     context: ProjectContext,
     token: vscode.CancellationToken
   ): Promise<CompletionResult | null> {
-    const startTime = Date.now();
     const cursorLine = document.lineAt(position.line).text;
     const linePrefix = cursorLine.substring(0, position.character);
     
@@ -49,11 +55,10 @@ export class PredictionEngine implements vscode.Disposable {
     const cached = await this.cache.get(cacheKey);
     
     if (cached) {
-      this.logger.debug(`Fast-path cache hit: L${position.line}`);
       return cached;
     }
 
-    // 2. Heavy Context Hash Validation (If not in fast-path)
+    // 2. Heavy Context Hash Validation
     const contextHash = this.cache.generateHash(context.currentFile.precedingLines);
 
     // 3. Prompt Construction
@@ -62,28 +67,26 @@ export class PredictionEngine implements vscode.Disposable {
     // 4. Model Inference
     const request: ModelRequest = {
       prompt,
-      maxTokens: Math.min(this.config.getValue('maxCompletionLines') * 10, 500),
-      temperature: 0.1,
-      stopSequences: ['<|fim_suffix|>', '<|file_separator|>', '```'],
-      stream: this.config.getValue('streamingEnabled'),
+      maxTokens: 128, // Small for speed, most completions are short
+      temperature: 0, // Deterministic for better caching
+      stopSequences: ['<|fim_suffix|>', '<|file_separator|>', '\n\n', '```'],
+      stream: false, // Streaming is slower for very short completions
     };
 
     try {
       const response = await this.modelLayer.complete(request);
-      if (token.isCancellationRequested) {return null;}
+      if (token.isCancellationRequested) return null;
 
       // 5. Post-processing
       const completionText = this.postProcess(response.text, linePrefix);
-      if (!completionText) {
-          return null;
-      }
+      if (!completionText) return null;
 
       const result: CompletionResult = {
         id: Math.random().toString(36).substring(7),
         text: completionText,
         insertText: completionText,
         range: new vscode.Range(position, position),
-        confidence: 0.9,
+        confidence: 0.95,
         source: 'inline',
         metadata: {
           modelLatencyMs: response.latencyMs,
@@ -98,7 +101,6 @@ export class PredictionEngine implements vscode.Disposable {
 
       return result;
     } catch (err) {
-      this.logger.error('Completion generation failed', err);
       return null;
     }
   }
@@ -106,26 +108,26 @@ export class PredictionEngine implements vscode.Disposable {
   private postProcess(text: string, prefix: string): string {
     let processed = text;
     
-    // Remove common prefixes that the model might repeat
+    // Remove model FIM markers and garbage
+    processed = processed.replace(/<\|fim_middle\|>|<\|fim_suffix\|>|<\|fim_prefix\|>/g, '');
+    
+    // If the model repeated the prefix, strip it
     if (processed.startsWith(prefix)) {
         processed = processed.substring(prefix.length);
+    } else if (prefix.trim() && processed.trim().startsWith(prefix.trim())) {
+        // Handle cases with different indentation/spacing
+        const trimPrefix = prefix.trim();
+        const startIdx = processed.indexOf(trimPrefix);
+        if (startIdx !== -1) {
+            processed = processed.substring(startIdx + trimPrefix.length);
+        }
     }
 
-    // Strip model FIM markers
-    processed = processed.replace(/<\|fim_middle\|>/g, '');
-    processed = processed.replace(/<\|fim_suffix\|>/g, '');
-    processed = processed.replace(/<\|fim_prefix\|>/g, '');
+    // Clean up
+    processed = processed.split('<|')[0]; // Remove any other markers
+    processed = processed.split('\r?\n\r?\n')[0]; // Double newline is often a stop sign
     
-    // Handle whitespace-only completions
-    if (processed.trim().length === 0 && processed.length > 0) {
-        return processed;
-    }
-
-    processed = processed.trimEnd();
-    
-    // Reject useless completions
-    if (processed.length === 0) return '';
-    if (processed.length > 1000) return ''; // Sanity check
+    if (processed.length === 0 || processed.length > 500) return '';
 
     return processed;
   }
